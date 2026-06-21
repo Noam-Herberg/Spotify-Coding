@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#121212">
+  <title>Song Battle</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="/">Song<span>Battle</span></a>
+    <div class="account"><span id="account-name"></span><button id="login" class="spotify-button">Connect Spotify</button></div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">A SHARED MUSIC SHOWDOWN</p>
+      <h1>Two songs.<br>One winner.</h1>
+      <p class="intro">Listen, choose your favourite, and shape one shared Elo leaderboard with your friends.</p>
+    </section>
+
+    <section id="join-panel" class="panel join-panel" hidden>
+      <p class="eyebrow">PRIVATE GROUP</p>
+      <h2>Enter your invite code</h2>
+      <p>Spotify is connected. Join the private group to start voting.</p>
+      <form id="join-form"><input id="invite-code" type="password" autocomplete="one-time-code" placeholder="Invite code" required><button>Join group</button></form>
+      <p id="join-status" role="status"></p>
+    </section>
+
+    <section id="battle-section" class="battle-section" hidden>
+      <div class="section-title">
+        <div><p class="eyebrow">HEAD TO HEAD</p><h2>Song Battle</h2></div>
+        <div class="battle-setup">
+          <label for="battle-genre">Genre</label>
+          <select id="battle-genre">
+            <option value="all">All genres</option><option value="alternative">Alternative</option><option value="ambient">Ambient</option>
+            <option value="blues">Blues</option><option value="classical">Classical</option><option value="country">Country</option>
+            <option value="dance">Dance</option><option value="disco">Disco</option><option value="electronic">Electronic</option>
+            <option value="folk">Folk</option><option value="funk">Funk</option><option value="hip-hop">Hip-hop</option>
+            <option value="house">House</option><option value="indie">Indie</option><option value="jazz">Jazz</option>
+            <option value="latin">Latin</option><option value="metal">Metal</option><option value="pop">Pop</option>
+            <option value="punk">Punk</option><option value="r-n-b">R&amp;B</option><option value="reggae">Reggae</option>
+            <option value="rock">Rock</option><option value="soul">Soul</option><option value="techno">Techno</option><option value="world">World</option>
+          </select>
+          <label for="battle-decade">Decade</label>
+          <select id="battle-decade"><option value="all">All decades</option><option value="1960">1960s</option><option value="1970">1970s</option><option value="1980">1980s</option><option value="1990">1990s</option><option value="2000">2000s</option><option value="2010">2010s</option><option value="2020">2020s</option></select>
+          <button id="battle-start">Start a battle</button>
+        </div>
+      </div>
+      <p id="battle-status" role="status">Choose filters, then start a battle.</p>
+      <div id="battle-arena" class="battle-arena" hidden>
+        <article class="battle-card" data-side="left"><img alt="" width="320" height="320"><p class="battle-kicker">CURRENT CHAMPION</p><h3></h3><p class="battle-artist"></p><div class="battle-actions"><button class="battle-play">Play</button><a target="_blank" rel="noreferrer">Open in Spotify</a></div><button class="battle-pick">Pick this song</button></article>
+        <div class="versus">VS</div>
+        <article class="battle-card" data-side="right"><img alt="" width="320" height="320"><p class="battle-kicker">NEW CHALLENGER</p><h3></h3><p class="battle-artist"></p><div class="battle-actions"><button class="battle-play">Play</button><a target="_blank" rel="noreferrer">Open in Spotify</a></div><button class="battle-pick">Pick this song</button></article>
+      </div>
+
+      <div class="battle-leaderboard">
+        <div class="section-title compact"><div><p class="eyebrow">THE GROUP TABLE</p><h3>Shared standings</h3></div><button id="battle-reset" class="text-button" hidden>Reset standings</button></div>
+        <ol id="battle-ranking" class="battle-ranking"></ol>
+        <p id="battle-empty" class="empty">No shared battle results yet.</p>
+      </div>
+    </section>
+  </main>
+
+  <aside id="player" class="player" aria-label="Spotify player" hidden>
+    <img id="player-cover" alt="Current album cover" width="52" height="52"><div class="player-copy"><strong id="player-track">Ready to play</strong><span id="player-artist">Choose a song</span></div>
+    <div class="player-controls"><button id="previous" aria-label="Previous track">‹</button><button id="back-15" class="skip-control" aria-label="Go back 15 seconds">−15</button><button id="toggle-play" class="player-primary" aria-label="Play or pause">▶</button><button id="forward-15" class="skip-control" aria-label="Skip forward 15 seconds">+15</button><button id="next" aria-label="Next track">›</button></div>
+    <div class="player-timeline"><span id="elapsed">0:00</span><input id="seek" type="range" min="0" max="100" value="0" step="1" aria-label="Song position"><span id="duration">0:00</span></div>
+    <label class="volume-control"><span>VOL</span><input id="volume" type="range" min="0" max="100" value="70" step="1" aria-label="Volume"></label>
+  </aside>
+  <script src="/app.js" type="module"></script>
+</body>
+</html>

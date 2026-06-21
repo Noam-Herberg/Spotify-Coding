@@ -1,0 +1,78 @@
+:root { color-scheme: dark; --green: #1ed760; --ink: #f5f5f2; --muted: #a7a7a7; --card: #1c1c1c; }
+* { box-sizing: border-box; }
+body { margin: 0; padding-bottom: 92px; background: #121212; color: var(--ink); font: 16px/1.5 system-ui, -apple-system, Segoe UI, sans-serif; }
+body::before { content: ''; position: fixed; inset: 0 0 auto; height: 430px; pointer-events: none; background: radial-gradient(circle at 75% 10%, #1ed76022, transparent 45%); }
+header, main { position: relative; width: min(1060px, calc(100% - 40px)); margin: auto; }
+header { min-height: 82px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #ffffff18; }
+.brand { color: white; text-decoration: none; font-size: 21px; font-weight: 800; letter-spacing: -.7px; }
+.brand span { color: var(--green); }
+.account { display: flex; align-items: center; gap: 12px; }
+.account span { color: var(--muted); font-size: 14px; }
+button { border: 0; border-radius: 999px; padding: 12px 20px; font-weight: 750; cursor: pointer; }
+.spotify-button, form button { background: var(--green); color: #07170c; }
+.hero { padding: 86px 0 55px; }
+.eyebrow { margin: 0 0 12px; color: var(--green); font-size: 12px; font-weight: 800; letter-spacing: 2px; }
+h1 { margin: 0; max-width: 800px; font-size: clamp(52px, 8vw, 92px); line-height: .92; letter-spacing: -5px; }
+.intro { max-width: 580px; margin: 28px 0 0; color: var(--muted); font-size: 19px; }
+.panel { padding: 26px; border: 1px solid #ffffff13; border-radius: 18px; background: #191919dd; box-shadow: 0 30px 80px #0008; }
+.join-panel { max-width: 620px; margin-bottom: 50px; }
+.join-panel h2 { margin: 0; }
+.join-panel > p:not(.eyebrow) { color: var(--muted); }
+.join-panel form { display: flex; gap: 10px; }
+.join-panel form input { flex: 1; }
+#join-status { min-height: 24px; color: var(--muted); font-size: 14px; }
+input { width: 100%; border: 1px solid #ffffff25; border-radius: 9px; background: #2a2a2a; color: white; padding: 13px 15px; font: inherit; }
+input:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+.play-button { width: 42px; height: 42px; padding: 0; background: #fff; color: #111; font-size: 15px; }
+.battle-section { padding: 78px 0 20px; }
+.battle-section > .section-title { align-items: center; }
+.battle-setup { display: flex; align-items: center; gap: 10px; }
+.battle-setup label { color: var(--muted); font-size: 13px; font-weight: 750; }
+.battle-setup select { min-width: 150px; border: 1px solid #ffffff25; border-radius: 999px; background: #262626; color: white; padding: 11px 34px 11px 15px; font: inherit; cursor: pointer; }
+.battle-setup select:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+.battle-setup button { background: var(--green); color: #07170c; }
+.battle-intro { max-width: 620px; margin: -4px 0 8px; color: var(--muted); }
+#battle-status { min-height: 24px; margin: 0 0 22px; color: var(--muted); font-size: 14px; }
+.battle-arena { display: grid; grid-template-columns: minmax(0, 1fr) 58px minmax(0, 1fr); align-items: center; }
+.battle-card { min-width: 0; padding: 18px; border: 1px solid #ffffff16; border-radius: 18px; background: var(--card); }
+.battle-card > img { display: block; width: 100%; height: auto; aspect-ratio: 1; border-radius: 11px; object-fit: cover; background: #2d2d2d; }
+.battle-kicker { margin: 17px 0 4px; color: var(--green); font-size: 11px; font-weight: 850; letter-spacing: 1.5px; }
+.battle-card h3 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 25px; }
+.battle-artist { min-height: 24px; margin: 3px 0 16px; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.battle-actions { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.battle-actions button { background: #fff; color: #111; }
+.battle-actions a { color: var(--muted); font-size: 13px; }
+.battle-pick { width: 100%; background: var(--green); color: #07170c; }
+.versus { position: relative; z-index: 1; display: grid; place-items: center; width: 58px; height: 58px; border: 5px solid #121212; border-radius: 50%; background: white; color: #111; font-weight: 900; }
+.battle-leaderboard { margin-top: 52px; }
+.section-title.compact { align-items: center; margin-bottom: 8px; }
+.section-title.compact h3 { margin: 0; font-size: 22px; }
+.battle-ranking { margin: 0; padding: 0; list-style: none; counter-reset: battle-rank; }
+.battle-ranking li { counter-increment: battle-rank; display: grid; grid-template-columns: 42px 48px 1fr auto auto; gap: 13px; align-items: center; padding: 11px 8px; border-bottom: 1px solid #ffffff13; }
+.battle-ranking li::before { content: counter(battle-rank, decimal-leading-zero); color: #666; }
+.battle-ranking img { width: 48px; height: 48px; border-radius: 4px; object-fit: cover; }
+.battle-ranking strong, .battle-ranking span { display: block; }
+.battle-ranking span { color: var(--muted); font-size: 13px; }
+.battle-record { text-align: right; color: var(--green); font-weight: 800; }
+.battle-record small { display: block; color: var(--muted); font-weight: 500; }
+.section-title { display: flex; align-items: end; justify-content: space-between; margin-bottom: 18px; }
+h2 { margin: 0; font-size: 36px; letter-spacing: -1.5px; }
+.text-button { background: transparent; color: var(--muted); }
+.empty { padding: 34px; text-align: center; color: var(--muted); border: 1px dashed #ffffff28; border-radius: 12px; }
+.player { position: fixed; z-index: 5; left: 50%; bottom: 14px; transform: translateX(-50%); width: min(820px, calc(100% - 28px)); display: grid; grid-template-columns: 52px minmax(130px, 1fr) auto; gap: 9px 14px; align-items: center; padding: 12px 16px; border: 1px solid #ffffff20; border-radius: 14px; background: #252525ee; box-shadow: 0 15px 45px #000b; backdrop-filter: blur(16px); }
+.player[hidden] { display: none; }
+.player img { border-radius: 5px; object-fit: cover; background: #333; }
+.player-copy { min-width: 0; }
+.player-copy strong, .player-copy span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-copy span { color: var(--muted); font-size: 13px; }
+.player-controls { display: flex; align-items: center; gap: 6px; }
+.player-controls button { width: 36px; height: 36px; padding: 0; background: transparent; color: white; font-size: 25px; }
+.player-controls .player-primary { background: white; color: #111; font-size: 14px; }
+.player-controls .skip-control { width: 32px; color: var(--muted); font-size: 11px; }
+.player-timeline { grid-column: 2; display: grid; grid-template-columns: 36px 1fr 36px; gap: 8px; align-items: center; }
+.player-timeline span { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.player-timeline span:last-child { text-align: right; }
+.player input[type="range"] { height: 4px; padding: 0; border: 0; border-radius: 999px; accent-color: var(--green); cursor: pointer; }
+.volume-control { grid-column: 3; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: 1px; }
+.volume-control input { width: 92px; }
+@media (max-width: 650px) { body { padding-bottom: 180px; } header, main { width: min(100% - 24px, 1060px); } header { gap: 10px; } .account span { display: none; } .hero { padding-top: 60px; } h1 { letter-spacing: -3px; } .join-panel form { flex-wrap: wrap; } .join-panel form button { width: 100%; } .battle-section > .section-title { display: block; } .battle-setup { margin-top: 18px; flex-wrap: wrap; } .battle-setup select { flex: 1; } .battle-arena { grid-template-columns: 1fr; gap: 0; } .versus { margin: -8px auto; } .battle-card { padding: 14px; } .battle-card h3 { font-size: 21px; } .battle-ranking li { grid-template-columns: 30px 42px 1fr auto; } .battle-ranking img { width: 42px; height: 42px; } .battle-record { grid-column: 3 / 5; text-align: left; } .player { grid-template-columns: 44px 1fr; } .player img { width: 44px; height: 44px; } .player-controls { grid-column: 1 / -1; justify-content: center; } .player-timeline { grid-column: 1 / -1; } .volume-control { grid-column: 1 / -1; justify-content: center; } }

@@ -1,0 +1,21 @@
+{
+  "name": "spotify-song-ranker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A private shared Spotify Song Battle app with Elo standings.",
+  "scripts": {
+    "dev": "vercel dev --listen 3000",
+    "start": "vercel dev --listen 3000",
+    "db:migrate": "node scripts/migrate.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "vercel": "^46.1.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
