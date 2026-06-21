@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { bracketPlan, roomCode, shuffle } = require('../api/_lib/party');
+const { bracketPlan, publicPlayer, roomCode, shuffle } = require('../api/_lib/party');
 
 test('bracket plan includes two surprises and chooses the next power of two', () => {
   assert.deepEqual(bracketPlan(2, 16), { bracketSize: 8, randomCount: 4 });
@@ -16,4 +16,10 @@ test('room code uses six unambiguous characters', () => {
 
 test('shuffle retains every element', () => {
   assert.deepEqual(shuffle([1, 2, 3], () => 0), [2, 3, 1]);
+});
+
+test('maps database player fields to the public phone state', () => {
+  assert.deepEqual(publicPlayer({ id: 'p1', display_name: 'Alex', active: true, ready: false, pick_count: '2' }), {
+    id: 'p1', displayName: 'Alex', active: true, ready: false, pickCount: 2
+  });
 });

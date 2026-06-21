@@ -3,7 +3,7 @@ const { getSession } = require('./_lib/auth');
 const { getPool, transaction } = require('./_lib/db');
 const { HttpError } = require('./_lib/errors');
 const { cookie, cookies, json, validateOrigin } = require('./_lib/http');
-const { bracketPlan, guestToken, hashGuestToken, roomCode, shuffle } = require('./_lib/party');
+const { bracketPlan, guestToken, hashGuestToken, publicPlayer, roomCode, shuffle } = require('./_lib/party');
 const { randomSearch } = require('./_lib/discovery');
 const { spotifyFetch } = require('./_lib/spotify');
 const tracks = require('./_lib/tracks');
@@ -74,9 +74,10 @@ async function fetchState(roomId, role, playerId = null) {
     count(v.id) FILTER (WHERE p.active)::int AS voted
     FROM party_players p LEFT JOIN party_votes v ON v.player_id=p.id AND v.matchup_id=$1 AND v.attempt=$2
     WHERE p.room_id=$3`, [current.id, current.vote_attempt, roomId])).rows[0] : { eligible: 0, voted: 0 };
+  const visiblePlayers = playerRows.map(publicPlayer);
   const result = {
     room: { code: room.code, phase: room.phase, maxBracketSize: room.max_bracket_size, bracketSize: room.bracket_size, version: Number(room.version), expiresAt: room.expires_at },
-    players: playerRows.map((p) => ({ id: p.id, displayName: p.display_name, active: p.active, ready: p.ready, pickCount: p.pick_count })),
+    players: visiblePlayers,
     currentMatchup: current ? {
       id: current.id, round: current.round, position: current.position, status: current.status, attempt: current.vote_attempt,
       playedA: current.played_a, playedB: current.played_b,
@@ -88,7 +89,7 @@ async function fetchState(roomId, role, playerId = null) {
   };
   if (role === 'player') {
     const own = await getPool().query(`SELECT s.id AS room_song_id,t.* FROM party_songs s JOIN tracks t ON t.spotify_id=s.track_id WHERE s.owner_player_id=$1 AND s.room_id=$2 ORDER BY s.created_at`, [playerId, roomId]);
-    result.you = playerRows.find((p) => p.id === playerId);
+    result.you = visiblePlayers.find((p) => p.id === playerId);
     result.picks = own.rows.map((row) => ({ roomSongId: row.room_song_id, ...tracks.fromRow(row) }));
     if (current && ['voting','revote'].includes(current.status)) {
       const voted = await getPool().query('SELECT song_id FROM party_votes WHERE matchup_id=$1 AND attempt=$2 AND player_id=$3', [current.id, current.vote_attempt, playerId]);
@@ -112,7 +113,7 @@ async function randomTracks(hostId, count, excluded = new Set()) {
   const found = [];
   for (let attempt = 0; attempt < 24 && found.length < count; attempt += 1) {
     const { query, offset } = randomSearch('all', 'all');
-    const payload = await spotifyFetch(hostId, `/search?type=track&limit=20&offset=${offset}&q=${encodeURIComponent(query)}`);
+    const payload = await spotifyFetch(hostId, `/search?type=track&limit=10&offset=${offset}&q=${encodeURIComponent(query)}`);
     for (const item of payload.tracks?.items || []) {
       if (!item?.id || item.is_local || item.is_playable === false || excluded.has(item.id)) continue;
       excluded.add(item.id); found.push(tracks.fromSpotify(item));
@@ -256,7 +257,7 @@ async function route(request, response) {
     const p = await guest(request, request.query.code); const query = String(request.query.q || '').trim().slice(0, 100);
     await rateLimit(`search:${p.id}`, 30);
     if (query.length < 2) throw new HttpError(400, 'Search for at least two characters.', 'invalid_search');
-    const result = await spotifyFetch(p.host_user_id, `/search?type=track&limit=12&q=${encodeURIComponent(query)}`);
+    const result = await spotifyFetch(p.host_user_id, `/search?type=track&limit=10&q=${encodeURIComponent(query)}`);
     return json(response, 200, { tracks: (result.tracks?.items || []).filter((t) => t.id && !t.is_local && t.is_playable !== false).map(tracks.fromSpotify) });
   }
   if (action === 'pick' && request.method === 'POST') {

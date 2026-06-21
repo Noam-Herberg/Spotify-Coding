@@ -35,4 +35,14 @@ function shuffle(values, random = Math.random) {
   return result;
 }
 
-module.exports = { bracketPlan, guestToken, hashGuestToken, roomCode, shuffle };
+function publicPlayer(row) {
+  return {
+    id: row.id,
+    displayName: row.display_name,
+    active: row.active,
+    ready: row.ready,
+    pickCount: Number(row.pick_count || 0)
+  };
+}
+
+module.exports = { bracketPlan, guestToken, hashGuestToken, publicPlayer, roomCode, shuffle };
