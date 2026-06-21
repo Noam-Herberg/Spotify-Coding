@@ -26,5 +26,5 @@ module.exports = handler('GET', async (request, response) => {
     return createSession(client, profile.id);
   });
   response.setHeader('Set-Cookie', [cookie('song_battle_session', sessionToken, { maxAge: 2592000 }), cookie('spotify_oauth_state', '', { maxAge: 0 })]);
-  response.redirect(302, appUrl);
+  response.redirect(302, `${appUrl}/host`);
 });

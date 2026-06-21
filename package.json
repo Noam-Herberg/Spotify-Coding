@@ -2,7 +2,7 @@
   "name": "spotify-song-ranker",
   "version": "0.1.0",
   "private": true,
-  "description": "A private shared Spotify Song Battle app with Elo standings.",
+  "description": "A Spotify-powered, co-located song battle party game.",
   "scripts": {
     "dev": "vercel dev --listen 3000",
     "start": "vercel dev --listen 3000",

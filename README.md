@@ -1,76 +1,42 @@
-# Song Battle
+# Song Battle Party
 
-A private shared Spotify battle app with random and curated battles, nominations, playlist snapshots, personal stats, and group tournaments. Every vote updates one group Elo leaderboard transactionally.
+A co-located music party game. One Host signs into Spotify Premium on a laptop or TV, while players join from their phones with a room code, privately submit two songs, and vote through a single-elimination bracket.
 
 ## Architecture
 
-- Static browser UI and Vercel Functions
-- Spotify Authorization Code OAuth managed by the server
-- Spotify Web Playback SDK for full-track playback
-- Neon Postgres for users, sessions, memberships, battles, votes, and ratings
-- One invite-only group; the first member to join becomes owner
+- Static Host, player, and landing pages deployed on Vercel
+- One consolidated party-game Vercel Function to remain within Hobby limits
+- Server-managed Spotify Authorization Code OAuth and encrypted refresh tokens
+- Spotify Web Playback SDK on the Host board only
+- Anonymous, hashed guest sessions for player phones
+- Neon Postgres as the authoritative room, bracket, and vote store
+- Two-second version-based polling; no WebSocket dependency
 
-Full-track playback requires Spotify Premium. While the Spotify app is in development mode, add every friend as an approved app user in the Spotify dashboard.
+Spotify Premium is required only for the Host. Guest players do not authenticate with Spotify and do not consume Spotify Development Mode user slots.
 
 ## Local setup
 
-Requirements: Node.js 18+, npm, a Neon database, and a Spotify developer app.
+1. Install dependencies with `npm install`.
+2. Copy `.env.example` to `.env` and configure it.
+3. Register `http://127.0.0.1:3000/api/auth/callback` in Spotify.
+4. Apply migrations with `npm run db:migrate`.
+5. Run `npm run dev` and open `http://127.0.0.1:3000`.
 
-1. Install dependencies:
+For production, set `APP_URL` to the final HTTPS origin, register its `/api/auth/callback`, apply migrations to the production Neon database, and redeploy. `/api/health` checks configuration, database access, and the party schema without exposing secrets.
 
-   ```powershell
-   npm install
-   ```
+## Game rules
 
-2. Copy `.env.example` to `.env` and configure every value. Generate separate strong random values for `SESSION_SECRET` and `TOKEN_ENCRYPTION_KEY`.
+- A 16-song room supports up to 7 active players; a 32-song room supports up to 15.
+- Each player gets two owned songs. Missing picks are filled randomly and assigned to that player.
+- At least two additional surprise songs are unowned.
+- Submitters remain hidden until the final result.
+- Everyone may vote for their own song.
+- One tied vote triggers a re-vote; a second tie is decided by the Host.
+- Curators score one point for each matchup won by an owned song.
+- Rooms expire after 24 hours.
 
-3. In the Spotify Developer Dashboard, add:
-
-   `http://127.0.0.1:3000/api/auth/callback`
-
-4. Apply the database schema:
-
-   ```powershell
-   npm run db:migrate
-   ```
-
-5. Start the Vercel-compatible local server:
-
-   ```powershell
-   npm run dev
-   ```
-
-6. Open `http://127.0.0.1:3000`.
-
-## Vercel deployment
-
-1. Import the repository into Vercel and attach a Neon Postgres database.
-2. Add all variables from `.env.example` to the Production environment. Set `APP_URL` to the final HTTPS origin without a trailing slash.
-3. Run `npm run db:migrate` once against the production `DATABASE_URL`.
-4. Add `https://<production-domain>/api/auth/callback` to the Spotify app.
-5. Deploy. Spotify login on preview URLs is intentionally unsupported unless each preview callback is registered separately.
-
-After deploying the curated-playlist update, existing members must disconnect and reconnect once to grant the new private/collaborative playlist scopes. Playlist exports are created as private playlists in the exporting member's Spotify account.
-
-After deployment, open `/api/health`. It reports missing environment-variable names, database connectivity, schema readiness, and the exact Spotify callback URL without exposing any secret values.
-
-Never expose `SPOTIFY_CLIENT_SECRET`, `DATABASE_URL`, `SESSION_SECRET`, `TOKEN_ENCRYPTION_KEY`, or `GROUP_INVITE_CODE` to browser code.
-
-## Shared ranking behavior
-
-- New songs start at 1000 Elo.
-- K-factor is 32.
-- Genre and decade affect discovery only; every valid vote updates the same global group rating.
-- The server issues each battle and accepts one vote for it.
-- Vote transactions lock both rating rows before calculating changes.
-- Authenticated members are limited to 120 issued battles and 120 votes per hour.
-- Standings refresh immediately after a vote and every 30 seconds.
-- Only the first group member can reset all standings.
+Legacy Elo, nomination, playlist, and tournament tables remain in the database for rollback, but their routes and UI are no longer active.
 
 ## Tests
 
-```powershell
-npm test
-```
-
-The local suite checks Elo calculations and discovery filter generation. OAuth, Neon transactions, Spotify playback, and Vercel routing require configured integration environments.
+Run `npm test`. OAuth, Spotify playback, and Neon transaction flows additionally require configured integration environments.

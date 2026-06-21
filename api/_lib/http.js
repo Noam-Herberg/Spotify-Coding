@@ -54,4 +54,4 @@ function cookie(name, value, options = {}) {
   return parts.join('; ');
 }
 
-module.exports = { cookie, cookies, handler, json, requiredAppUrl };
+module.exports = { cookie, cookies, handler, json, requiredAppUrl, validateOrigin };
