@@ -3,7 +3,7 @@ const { getSession } = require('./_lib/auth');
 const { getPool, transaction } = require('./_lib/db');
 const { HttpError } = require('./_lib/errors');
 const { cookie, cookies, json, validateOrigin } = require('./_lib/http');
-const { bracketPlan, guestToken, hashGuestToken, publicPlayer, roomCode, shuffle } = require('./_lib/party');
+const { bracketPlan, guestToken, hashGuestToken, publicPlayer, rankKnownTracks, releaseWindow, roomCode, shuffle } = require('./_lib/party');
 const { randomSearch } = require('./_lib/discovery');
 const { spotifyFetch } = require('./_lib/spotify');
 const tracks = require('./_lib/tracks');
@@ -112,15 +112,61 @@ async function fetchState(roomId, role, playerId = null) {
   return result;
 }
 
-async function randomTracks(hostId, count, excluded = new Set()) {
+function chunks(values, size = 10) {
+  const result = [];
+  for (let index = 0; index < values.length; index += size) result.push(values.slice(index, index + size));
+  return result;
+}
+
+async function seedProfiles(hostId, trackIds) {
+  const spotifyTracks = [];
+  try {
+    for (const group of chunks([...new Set(trackIds)])) {
+      const payload = await spotifyFetch(hostId, `/tracks?ids=${encodeURIComponent(group.join(','))}`);
+      spotifyTracks.push(...(payload.tracks || []).filter(Boolean));
+    }
+  } catch { return []; }
+  const artistIds = [...new Set(spotifyTracks.map((track) => track.artists?.[0]?.id).filter(Boolean))];
+  const artists = new Map();
+  try {
+    for (const group of chunks(artistIds)) {
+      const payload = await spotifyFetch(hostId, `/artists?ids=${encodeURIComponent(group.join(','))}`);
+      for (const artist of payload.artists || []) if (artist?.id) artists.set(artist.id, artist);
+    }
+  } catch { /* Release decade and artist name still provide a useful seed. */ }
+  return spotifyTracks.map((track) => {
+    const artist = artists.get(track.artists?.[0]?.id);
+    return {
+      id: track.id,
+      artist: track.artists?.[0]?.name || '',
+      genres: (artist?.genres || []).filter(Boolean),
+      window: releaseWindow(track.album?.release_date)
+    };
+  });
+}
+
+function seededSearch(profile, attempt) {
+  const parts = [];
+  if (profile?.genres?.length) parts.push(`genre:"${profile.genres[attempt % profile.genres.length].replace(/"/g, '')}"`);
+  else if (profile?.artist) parts.push(`artist:"${profile.artist.replace(/"/g, '')}"`);
+  if (profile?.window) parts.push(`year:${profile.window.start}-${profile.window.end}`);
+  return parts.join(' ');
+}
+
+async function randomTracks(hostId, count, excluded = new Set(), profiles = []) {
   const found = [];
-  for (let attempt = 0; attempt < 24 && found.length < count; attempt += 1) {
-    const { query, offset } = randomSearch('all', 'all');
-    const payload = await spotifyFetch(hostId, `/search?type=track&limit=10&offset=${offset}&q=${encodeURIComponent(query)}`);
-    for (const item of payload.tracks?.items || []) {
+  for (let attempt = 0; attempt < 36 && found.length < count; attempt += 1) {
+    const profile = profiles.length ? profiles[attempt % profiles.length] : null;
+    const fallback = randomSearch('all', 'all');
+    const query = seededSearch(profile, attempt) || fallback.query;
+    const payload = await spotifyFetch(hostId, `/search?type=track&limit=10&offset=0&q=${encodeURIComponent(query)}`);
+    const candidates = rankKnownTracks(payload.tracks?.items || []);
+    let accepted = 0;
+    for (const item of candidates) {
       if (!item?.id || item.is_local || item.is_playable === false || excluded.has(item.id)) continue;
       excluded.add(item.id); found.push(tracks.fromSpotify(item));
-      if (found.length === count) break;
+      accepted += 1;
+      if (found.length === count || accepted === 3) break;
     }
   }
   if (found.length < count) throw new HttpError(502, 'Spotify could not find enough unique playable tracks. Try again.', 'random_tracks_unavailable');
@@ -150,7 +196,8 @@ async function assemble(request, response) {
   const picks = (await getPool().query("SELECT s.* FROM party_songs s JOIN party_players p ON p.id=s.owner_player_id WHERE s.room_id=$1 AND s.source='pick' AND p.active", [room.id])).rows;
   const missing = players.reduce((total, player) => total + Math.max(0, 2 - picks.filter((song) => song.owner_player_id === player.id).length), 0);
   const excluded = new Set(picks.map((song) => song.track_id));
-  const generated = await randomTracks(session.spotify_user_id, plan.randomCount + missing, excluded);
+  const profiles = await seedProfiles(session.spotify_user_id, picks.map((song) => song.track_id));
+  const generated = await randomTracks(session.spotify_user_id, plan.randomCount + missing, excluded, shuffle(profiles));
   await transaction(async (client) => {
     const locked = (await client.query('SELECT * FROM party_rooms WHERE id=$1 FOR UPDATE', [room.id])).rows[0];
     if (!['lobby','picking'].includes(locked.phase)) throw new HttpError(409, 'The bracket has already started.', 'invalid_room_phase');

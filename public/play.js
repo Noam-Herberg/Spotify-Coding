@@ -1,6 +1,7 @@
 import { $, $$, api, escapeHtml, show, text } from './common.js';
 
 const code = new URLSearchParams(location.search).get('room')?.toUpperCase() || '';
+if (new URLSearchParams(location.search).get('embedded') === '1') document.body.classList.add('embedded');
 let state = null, polling = false;
 text('#phone-code', code);
 

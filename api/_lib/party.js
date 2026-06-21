@@ -46,4 +46,18 @@ function publicPlayer(row) {
   };
 }
 
-module.exports = { bracketPlan, guestToken, hashGuestToken, publicPlayer, roomCode, shuffle };
+function releaseWindow(releaseDate) {
+  const year = Number(String(releaseDate || '').slice(0, 4));
+  if (!Number.isInteger(year) || year < 1900 || year > 2100) return null;
+  const start = Math.floor(year / 10) * 10;
+  return { start, end: Math.min(start + 9, new Date().getUTCFullYear()) };
+}
+
+function rankKnownTracks(values) {
+  return [...values].sort((left, right) => {
+    const popularity = Number(right.popularity || 0) - Number(left.popularity || 0);
+    return popularity || Number(Boolean(right.album?.album_type === 'album')) - Number(Boolean(left.album?.album_type === 'album'));
+  });
+}
+
+module.exports = { bracketPlan, guestToken, hashGuestToken, publicPlayer, rankKnownTracks, releaseWindow, roomCode, shuffle };

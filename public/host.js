@@ -2,6 +2,7 @@ import { $, $$, api, escapeHtml, formatTime, show, text } from './common.js';
 
 let state = null, spotifyPlayer = null, deviceId = null, playerPromise = null, tokenCache = null, championTrack = null;
 let position = 0, duration = 0, paused = true, updatedAt = Date.now(), seeking = false, polling = false;
+let hostMode = 'host';
 
 async function checkAuth() {
   const response = await fetch('/api/me'); const me = await response.json();
@@ -18,11 +19,21 @@ async function load(silent = true) {
 }
 
 function activePhase(id) { $$('.phase').forEach((node) => { node.hidden = node.id !== id; }); }
+function applyHostMode() {
+  const playing = hostMode === 'player';
+  show('#board', !playing); show('#host-player-panel', playing);
+  $('#show-host').classList.toggle('active', !playing); $('#show-player').classList.toggle('active', playing);
+  $('#show-host').setAttribute('aria-selected', String(!playing)); $('#show-player').setAttribute('aria-selected', String(playing));
+}
+function ensurePlayerFrame() {
+  const frame = $('#host-player-frame');
+  if (state?.room?.code && !frame.getAttribute('src')) frame.src = `/play?room=${encodeURIComponent(state.room.code)}&embedded=1`;
+}
 function people(target) { $(target).innerHTML = state.players.map((p) => `<div class="person ${p.active ? '' : 'inactive'}"><span class="avatar">${escapeHtml(p.displayName[0])}</span><div><strong>${escapeHtml(p.displayName)}</strong><small>${p.pickCount}/2 picks ${p.ready ? '· Ready' : ''}</small></div><button class="ghost active-toggle" data-id="${p.id}" data-active="${p.active}">${p.active ? 'Mark absent' : 'Make active'}</button></div>`).join('') || '<p class="muted">Waiting for players to join…</p>'; $$('.active-toggle', $(target)).forEach((button) => button.onclick = () => mutate('active', { playerId: button.dataset.id, active: button.dataset.active !== 'true' })); }
 function songCard(side, track) { const card = $(`.song-card[data-side="${side}"]`); $('img', card).src = track?.image || ''; $('h2', card).textContent = track?.name || ''; $('.artist', card).textContent = track?.artist || ''; $('a', card).href = track?.url || '#'; $('.play', card).disabled = !track; }
 
 function render() {
-  show('#host-intro', false); show('#board', true); show('#end', true); text('#code', state.room.code); text('#phase-pill', state.room.phase.toUpperCase()); text('#player-count', `${state.players.filter((p) => p.active).length} active players`);
+  show('#host-intro', false); show('#host-mode-tabs', true); show('#end', true); ensurePlayerFrame(); applyHostMode(); text('#code', state.room.code); text('#phase-pill', state.room.phase.toUpperCase()); text('#player-count', `${state.players.filter((p) => p.active).length} active players`);
   const phase = state.room.phase;
   if (phase === 'lobby') { activePhase('lobby'); people('#lobby-players'); $$('input[name="cap"]').forEach((radio) => { radio.checked = Number(radio.value) === state.room.maxBracketSize; }); }
   else if (phase === 'picking') { activePhase('picking'); people('#pick-players'); }
@@ -63,6 +74,8 @@ async function seek(change = null) { if (!spotifyPlayer) return; const current =
 function updateTimeline() { const current = Math.min(duration, position + (paused ? 0 : Date.now() - updatedAt)); if (!seeking) { $('#seek').value = current; text('#elapsed', formatTime(current)); } $('#seek').max = Math.max(duration, 1); text('#duration', formatTime(duration)); }
 
 $('#connect').onclick = () => { location.href = '/api/auth/login'; }; $('#create').onclick = async () => { text('#host-status', 'Creating room…'); try { state = await api('create', { method: 'POST' }); render(); } catch (error) { text('#host-status', error.message); } };
+$('#show-host').onclick = () => { hostMode = 'host'; applyHostMode(); };
+$('#show-player').onclick = () => { hostMode = 'player'; ensurePlayerFrame(); applyHostMode(); };
 $$('input[name="cap"]').forEach((radio) => radio.onchange = () => mutate('settings', { maxBracketSize: Number(radio.value) })); $('#begin').onclick = () => mutate('begin'); $('#assemble').onclick = () => mutate('assemble'); $('#start-matches').onclick = () => mutate('start');
 $$('.song-card .play').forEach((button) => button.onclick = () => play(button.closest('.song-card').dataset.side)); $$('.song-card .replace').forEach((button) => button.onclick = () => mutate('replace', { side: button.closest('.song-card').dataset.side }));
 $$('.song-card .heard').forEach((button) => button.onclick = () => mutate('played', { side: button.closest('.song-card').dataset.side }));

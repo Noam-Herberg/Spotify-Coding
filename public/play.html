@@ -1,4 +1,11 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101210"><title>Play - Song Battle</title><link rel="stylesheet" href="/styles.css"></head><body class="phone-page"><header><a class="brand" href="/">Song<span>Battle</span></a><span id="phone-code" class="pill"></span></header><main class="phone-main"><section id="rejoin" class="panel" hidden><h1>Join the room</h1><form id="rejoin-form"><label>Your name<input id="rejoin-name" maxlength="30" required></label><button>Join</button></form></section>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101210"><title>Play - Song Battle</title><link rel="stylesheet" href="/styles.css"><style>
+  html,body{max-width:100%;overflow-x:hidden}
+  .phone-main,.phone-phase,.track,.vote-grid>*{min-width:0;max-width:100%}
+  .phone-page.embedded{padding-bottom:15px;background:var(--bg)}
+  .phone-page.embedded>header{display:none}
+  .phone-page.embedded .phone-main{width:min(620px,calc(100% - 20px))}
+  @media(max-width:420px){.search{display:grid;grid-template-columns:minmax(0,1fr) auto}.vote-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.vote-card{min-width:0}.vote-card strong,.vote-card span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+</style></head><body class="phone-page"><header><a class="brand" href="/">Song<span>Battle</span></a><span id="phone-code" class="pill"></span></header><main class="phone-main"><section id="rejoin" class="panel" hidden><h1>Join the room</h1><form id="rejoin-form"><label>Your name<input id="rejoin-name" maxlength="30" required></label><button>Join</button></form></section>
 <section id="phone-app" hidden><div class="phone-welcome"><p class="eyebrow">YOU ARE PLAYING AS</p><h1 id="your-name"></h1></div>
 <section id="phone-picks" class="phone-phase"><h2>Choose your two songs</h2><p class="muted">Your choices stay secret until the game ends.</p><form id="search-form" class="search"><input id="search-query" placeholder="Search songs or artists" required><button>Search</button></form><div id="search-results" class="track-list"></div><h3>Your picks</h3><div id="your-picks" class="track-list"></div><button id="ready">I'm ready</button></section>
 <section id="phone-wait" class="phone-phase center" hidden><div class="pulse">&#9835;</div><h2 id="wait-title">Waiting for the Host</h2><p id="wait-copy" class="muted"></p></section>
