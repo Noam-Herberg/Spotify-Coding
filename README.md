@@ -50,6 +50,8 @@ Requirements: Node.js 18+, npm, a Neon database, and a Spotify developer app.
 4. Add `https://<production-domain>/api/auth/callback` to the Spotify app.
 5. Deploy. Spotify login on preview URLs is intentionally unsupported unless each preview callback is registered separately.
 
+After deployment, open `/api/health`. It reports missing environment-variable names, database connectivity, schema readiness, and the exact Spotify callback URL without exposing any secret values.
+
 Never expose `SPOTIFY_CLIENT_SECRET`, `DATABASE_URL`, `SESSION_SECRET`, `TOKEN_ENCRYPTION_KEY`, or `GROUP_INVITE_CODE` to browser code.
 
 ## Shared ranking behavior

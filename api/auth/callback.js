@@ -9,7 +9,8 @@ module.exports = handler('GET', async (request, response) => {
   const state = cookies(request).spotify_oauth_state;
   if (!state || !request.query.state || !safeEqual(state, request.query.state)) throw new HttpError(400, 'Spotify login state could not be verified.', 'invalid_oauth_state');
   if (!request.query.code) throw new HttpError(400, 'Spotify login was cancelled.', 'spotify_login_cancelled');
-  const token = await exchangeCode(request.query.code, `${requiredAppUrl()}/api/auth/callback`);
+  const appUrl = requiredAppUrl(request);
+  const token = await exchangeCode(request.query.code, `${appUrl}/api/auth/callback`);
   const profile = await spotifyProfile(token.access_token);
   const sessionToken = await transaction(async (client) => {
     await client.query(`INSERT INTO users (spotify_user_id, display_name, email) VALUES ($1,$2,$3)
@@ -25,5 +26,5 @@ module.exports = handler('GET', async (request, response) => {
     return createSession(client, profile.id);
   });
   response.setHeader('Set-Cookie', [cookie('song_battle_session', sessionToken, { maxAge: 2592000 }), cookie('spotify_oauth_state', '', { maxAge: 0 })]);
-  response.redirect(302, requiredAppUrl());
+  response.redirect(302, appUrl);
 });

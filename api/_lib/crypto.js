@@ -1,11 +1,12 @@
 const crypto = require('node:crypto');
+const { HttpError } = require('./errors');
 
 const b64url = (buffer) => buffer.toString('base64url');
 const key = () => crypto.createHash('sha256').update(required('TOKEN_ENCRYPTION_KEY')).digest();
 
 function required(name) {
   const value = process.env[name];
-  if (!value) throw new Error(`${name} is not configured.`);
+  if (!value) throw new HttpError(503, `${name} is not configured for this deployment.`, 'server_configuration');
   return value;
 }
 

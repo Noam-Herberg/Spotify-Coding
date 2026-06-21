@@ -21,14 +21,23 @@ function handler(method, work) {
 }
 
 function validateOrigin(request) {
-  const expected = new URL(requiredAppUrl()).origin;
+  const expected = new URL(requiredAppUrl(request)).origin;
   const origin = request.headers.origin;
   if (origin !== expected) throw new HttpError(403, 'Invalid request origin.', 'invalid_origin');
 }
 
-function requiredAppUrl() {
-  if (!process.env.APP_URL) throw new Error('APP_URL is not configured.');
-  return process.env.APP_URL.replace(/\/$/, '');
+function requiredAppUrl(request) {
+  if (process.env.APP_URL) {
+    try {
+      return new URL(process.env.APP_URL).origin;
+    } catch {
+      throw new HttpError(503, 'APP_URL must be a complete URL such as https://spotifycoding.vercel.app.', 'server_configuration');
+    }
+  }
+  const host = request?.headers?.['x-forwarded-host'] || request?.headers?.host;
+  const protocol = request?.headers?.['x-forwarded-proto'] || (process.env.VERCEL ? 'https' : 'http');
+  if (host) return `${protocol}://${host}`;
+  throw new HttpError(503, 'APP_URL is not configured for this deployment.', 'server_configuration');
 }
 
 function cookies(request) {
@@ -40,7 +49,7 @@ function cookies(request) {
 
 function cookie(name, value, options = {}) {
   const parts = [`${name}=${encodeURIComponent(value)}`, 'Path=/', 'HttpOnly', 'SameSite=Lax'];
-  if (requiredAppUrl().startsWith('https://')) parts.push('Secure');
+  if (process.env.VERCEL || process.env.APP_URL?.startsWith('https://')) parts.push('Secure');
   if (options.maxAge !== undefined) parts.push(`Max-Age=${options.maxAge}`);
   return parts.join('; ');
 }
