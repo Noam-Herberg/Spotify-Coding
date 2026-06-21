@@ -22,7 +22,7 @@ Spotify Premium is required only for the Host. Guest players do not authenticate
 4. Apply migrations with `npm run db:migrate`.
 5. Run `npm run dev` and open `http://127.0.0.1:3000`.
 
-For production, set `APP_URL` to the final HTTPS origin, register its `/api/auth/callback`, apply migrations to the production Neon database, and redeploy. `/api/health` checks configuration, database access, and the party schema without exposing secrets.
+For production, set `APP_URL` to the final HTTPS origin, register its `/api/auth/callback`, apply migrations to the production Neon database, and redeploy. The app accepts either `DATABASE_URL` or Vercel Neon's generated `POSTGRES_URL`; migrations prefer `POSTGRES_URL_NON_POOLING` or `DATABASE_URL_UNPOOLED`. `/api/health` checks configuration, database access, and the party schema without exposing secrets.
 
 ## Game rules
 

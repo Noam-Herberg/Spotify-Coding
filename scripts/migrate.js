@@ -11,12 +11,14 @@ for (const filename of ['.env.local', '.env']) {
   }
 }
 
-if (!process.env.DATABASE_URL) {
-  console.error('DATABASE_URL is required.');
+const connectionString = process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL || process.env.POSTGRES_URL;
+
+if (!connectionString) {
+  console.error('POSTGRES_URL_NON_POOLING, DATABASE_URL_UNPOOLED, DATABASE_URL, or POSTGRES_URL is required.');
   process.exit(1);
 }
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+const pool = new Pool({ connectionString, ssl: { rejectUnauthorized: false } });
 
 async function main() {
   const directory = path.join(__dirname, '..', 'db', 'migrations');

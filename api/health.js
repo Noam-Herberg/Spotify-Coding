@@ -3,11 +3,12 @@ const { requiredAppUrl } = require('./_lib/http');
 
 module.exports = async (request, response) => {
   if (request.method !== 'GET') return response.status(405).json({ error: 'method_not_allowed' });
-  const required = ['SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET', 'DATABASE_URL', 'SESSION_SECRET', 'TOKEN_ENCRYPTION_KEY'];
+  const required = ['SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET', 'SESSION_SECRET', 'TOKEN_ENCRYPTION_KEY'];
   const missing = required.filter((name) => !process.env[name]);
+  if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) missing.push('DATABASE_URL or POSTGRES_URL');
   let databaseReachable = false;
   let schemaReady = false;
-  if (process.env.DATABASE_URL) {
+  if (process.env.DATABASE_URL || process.env.POSTGRES_URL) {
     try {
       const result = await getPool().query("SELECT to_regclass('public.users') IS NOT NULL AND to_regclass('public.party_rooms') IS NOT NULL AND to_regclass('public.party_players') IS NOT NULL AND to_regclass('public.party_matchups') IS NOT NULL AS ready");
       databaseReachable = true;
