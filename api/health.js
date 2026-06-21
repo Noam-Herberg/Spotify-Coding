@@ -10,7 +10,14 @@ module.exports = async (request, response) => {
   let schemaReady = false;
   if (process.env.DATABASE_URL || process.env.POSTGRES_URL) {
     try {
-      const result = await getPool().query("SELECT to_regclass('public.users') IS NOT NULL AND to_regclass('public.party_rooms') IS NOT NULL AND to_regclass('public.party_players') IS NOT NULL AND to_regclass('public.party_matchups') IS NOT NULL AS ready");
+      const result = await getPool().query(`SELECT
+        to_regclass('public.users') IS NOT NULL
+        AND to_regclass('public.party_rooms') IS NOT NULL
+        AND to_regclass('public.party_players') IS NOT NULL
+        AND to_regclass('public.party_matchups') IS NOT NULL
+        AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='party_rooms' AND column_name='rounds_played')
+        AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='party_players' AND column_name='overall_score')
+        AS ready`);
       databaseReachable = true;
       schemaReady = result.rows[0].ready;
     } catch {

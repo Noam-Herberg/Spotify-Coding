@@ -18,12 +18,10 @@ function hashGuestToken(token) {
 
 function bracketPlan(playerCount, cap) {
   if (!Number.isInteger(playerCount) || playerCount < 2) throw new Error('At least two players are required.');
-  if (![16, 32].includes(cap)) throw new Error('Bracket cap must be 16 or 32.');
+  if (![8, 16, 32].includes(cap)) throw new Error('Bracket size must be 8, 16, or 32.');
   const requiredSlots = playerCount * 2 + 2;
-  let size = 1;
-  while (size < requiredSlots) size *= 2;
-  if (size > cap) throw new Error(`This room needs a ${size}-song bracket.`);
-  return { bracketSize: size, randomCount: size - playerCount * 2 };
+  if (requiredSlots > cap) throw new Error(`This room needs at least a ${requiredSlots <= 16 ? 16 : 32}-song bracket.`);
+  return { bracketSize: cap, randomCount: cap - playerCount * 2 };
 }
 
 function shuffle(values, random = Math.random) {

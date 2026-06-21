@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS party_rooms (
   code text NOT NULL UNIQUE CHECK (code ~ '^[A-Z2-9]{6}$'),
   host_user_id text NOT NULL REFERENCES users(spotify_user_id) ON DELETE CASCADE,
   phase text NOT NULL DEFAULT 'lobby' CHECK (phase IN ('lobby','picking','reveal','playing','results','ended')),
-  max_bracket_size integer NOT NULL DEFAULT 16 CHECK (max_bracket_size IN (16,32)),
+  max_bracket_size integer NOT NULL DEFAULT 16 CHECK (max_bracket_size IN (8,16,32)),
   bracket_size integer,
   random_count integer,
   current_matchup_id uuid,

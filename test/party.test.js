@@ -2,11 +2,12 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { bracketPlan, publicPlayer, rankKnownTracks, releaseWindow, roomCode, shuffle } = require('../api/_lib/party');
 
-test('bracket plan includes two surprises and chooses the next power of two', () => {
-  assert.deepEqual(bracketPlan(2, 16), { bracketSize: 8, randomCount: 4 });
+test('bracket plan uses the exact selected size and includes surprise tracks', () => {
+  assert.deepEqual(bracketPlan(2, 8), { bracketSize: 8, randomCount: 4 });
+  assert.deepEqual(bracketPlan(2, 16), { bracketSize: 16, randomCount: 12 });
   assert.deepEqual(bracketPlan(7, 16), { bracketSize: 16, randomCount: 2 });
   assert.deepEqual(bracketPlan(15, 32), { bracketSize: 32, randomCount: 2 });
-  assert.throws(() => bracketPlan(8, 16), /needs a 32-song bracket/);
+  assert.throws(() => bracketPlan(4, 8), /at least a 16-song bracket/);
 });
 
 test('room code uses six unambiguous characters', () => {
