@@ -5,7 +5,9 @@ let pool;
 function getPool() {
   const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
   if (!connectionString) throw new Error('DATABASE_URL or POSTGRES_URL is not configured.');
-  if (!pool) pool = new Pool({ connectionString, ssl: { rejectUnauthorized: false }, max: 5 });
+  // Verify the server certificate by default; opt out only for providers with self-signed certs.
+  const ssl = process.env.DATABASE_SSL_NO_VERIFY === 'true' ? { rejectUnauthorized: false } : { rejectUnauthorized: true };
+  if (!pool) pool = new Pool({ connectionString, ssl, max: 5 });
   return pool;
 }
 

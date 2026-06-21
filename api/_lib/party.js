@@ -51,6 +51,13 @@ function releaseWindow(releaseDate) {
   return { start, end: Math.min(start + 9, new Date().getUTCFullYear()) };
 }
 
+function decideVote(totals, attempt) {
+  if (!totals.length) return { outcome: 'none' };
+  const tied = totals.length > 1 && totals[0].total === totals[1].total;
+  if (tied) return { outcome: attempt === 1 ? 'revote' : 'tiebreak' };
+  return { outcome: 'win', songId: totals[0].song_id };
+}
+
 function rankKnownTracks(values) {
   return [...values].sort((left, right) => {
     const popularity = Number(right.popularity || 0) - Number(left.popularity || 0);
@@ -58,4 +65,4 @@ function rankKnownTracks(values) {
   });
 }
 
-module.exports = { bracketPlan, guestToken, hashGuestToken, publicPlayer, rankKnownTracks, releaseWindow, roomCode, shuffle };
+module.exports = { bracketPlan, decideVote, guestToken, hashGuestToken, publicPlayer, rankKnownTracks, releaseWindow, roomCode, shuffle };

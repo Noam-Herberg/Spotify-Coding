@@ -18,14 +18,19 @@ if (!connectionString) {
   process.exit(1);
 }
 
-const pool = new Pool({ connectionString, ssl: { rejectUnauthorized: false } });
+const ssl = process.env.DATABASE_SSL_NO_VERIFY === 'true' ? { rejectUnauthorized: false } : { rejectUnauthorized: true };
+const pool = new Pool({ connectionString, ssl });
 
 async function main() {
+  await pool.query('CREATE TABLE IF NOT EXISTS schema_migrations (filename text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+  const applied = new Set((await pool.query('SELECT filename FROM schema_migrations')).rows.map((row) => row.filename));
   const directory = path.join(__dirname, '..', 'db', 'migrations');
   const files = fs.readdirSync(directory).filter((file) => file.endsWith('.sql')).sort();
   for (const file of files) {
+    if (applied.has(file)) { console.log(`Skipping ${file} (already applied)`); continue; }
     console.log(`Applying ${file}`);
     await pool.query(fs.readFileSync(path.join(directory, file), 'utf8'));
+    await pool.query('INSERT INTO schema_migrations (filename) VALUES ($1) ON CONFLICT DO NOTHING', [file]);
   }
   await pool.end();
 }

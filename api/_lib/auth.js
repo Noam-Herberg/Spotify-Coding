@@ -24,6 +24,8 @@ async function getSession(request, { required = true, member = false } = {}) {
     LEFT JOIN group_members gm ON gm.spotify_user_id = u.spotify_user_id
     LEFT JOIN groups g ON g.id = gm.group_id
     WHERE s.token_hash = $1 AND s.expires_at > now()
+    ORDER BY is_owner DESC NULLS LAST, gm.group_id
+    LIMIT 1
   `, [hashSession(token)]);
   const session = result.rows[0];
   if (!session) {

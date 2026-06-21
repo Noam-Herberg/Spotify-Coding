@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { bracketPlan, publicPlayer, rankKnownTracks, releaseWindow, roomCode, shuffle } = require('../api/_lib/party');
+const { bracketPlan, decideVote, publicPlayer, rankKnownTracks, releaseWindow, roomCode, shuffle } = require('../api/_lib/party');
 
 test('bracket plan uses the exact selected size and includes surprise tracks', () => {
   assert.deepEqual(bracketPlan(2, 8), { bracketSize: 8, randomCount: 4 });
@@ -33,4 +33,21 @@ test('turns a release date into its decade window', () => {
 test('prefers well-known Spotify search results', () => {
   const ranked = rankKnownTracks([{ id: 'deep', popularity: 12 }, { id: 'known', popularity: 78 }, { id: 'mid', popularity: 45 }]);
   assert.deepEqual(ranked.map((track) => track.id), ['known', 'mid', 'deep']);
+});
+
+test('decides a matchup by clear vote majority', () => {
+  assert.deepEqual(decideVote([{ song_id: 'a', total: 3 }, { song_id: 'b', total: 1 }], 1), { outcome: 'win', songId: 'a' });
+});
+
+test('treats a unanimous matchup as a win', () => {
+  assert.deepEqual(decideVote([{ song_id: 'a', total: 4 }], 1), { outcome: 'win', songId: 'a' });
+});
+
+test('a first tie triggers a revote and a second tie a host tie-break', () => {
+  assert.deepEqual(decideVote([{ song_id: 'a', total: 2 }, { song_id: 'b', total: 2 }], 1), { outcome: 'revote' });
+  assert.deepEqual(decideVote([{ song_id: 'a', total: 2 }, { song_id: 'b', total: 2 }], 2), { outcome: 'tiebreak' });
+});
+
+test('no eligible votes leave the matchup unresolved', () => {
+  assert.deepEqual(decideVote([], 1), { outcome: 'none' });
 });

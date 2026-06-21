@@ -3,7 +3,7 @@ const { getSession } = require('./_lib/auth');
 const { getPool, transaction } = require('./_lib/db');
 const { HttpError } = require('./_lib/errors');
 const { cookie, cookies, json, validateOrigin } = require('./_lib/http');
-const { bracketPlan, guestToken, hashGuestToken, publicPlayer, rankKnownTracks, releaseWindow, roomCode, shuffle } = require('./_lib/party');
+const { bracketPlan, decideVote, guestToken, hashGuestToken, publicPlayer, rankKnownTracks, releaseWindow, roomCode, shuffle } = require('./_lib/party');
 const { randomSearch } = require('./_lib/discovery');
 const { spotifyFetch } = require('./_lib/spotify');
 const tracks = require('./_lib/tracks');
@@ -26,6 +26,8 @@ async function rateLimit(key, maximum) {
       window_started=CASE WHEN party_rate_limits.window_started < now()-interval '1 minute' THEN now() ELSE party_rate_limits.window_started END
     RETURNING request_count`, [key]);
   if (result.rows[0].request_count > maximum) throw new HttpError(429, 'Too many requests. Wait a minute and try again.', 'rate_limited');
+  // Opportunistically prune expired rows so the table cannot grow without bound.
+  if (Math.random() < 0.02) await getPool().query("DELETE FROM party_rate_limits WHERE window_started < now()-interval '1 hour'").catch(() => {});
 }
 
 async function hostRoom(request, { lock = false, allowEnded = false } = {}) {
@@ -260,11 +262,14 @@ async function resolveVotesIfComplete(client, room, match) {
   const counts = (await client.query(`SELECT count(*) FILTER (WHERE p.active)::int eligible,count(v.id) FILTER (WHERE p.active)::int voted
     FROM party_players p LEFT JOIN party_votes v ON v.player_id=p.id AND v.matchup_id=$1 AND v.attempt=$2 WHERE p.room_id=$3`, [match.id, match.vote_attempt, room.id])).rows[0];
   if (!counts.eligible || counts.voted !== counts.eligible) return false;
-  const totals = (await client.query('SELECT song_id,count(*)::int total FROM party_votes WHERE matchup_id=$1 AND attempt=$2 GROUP BY song_id ORDER BY total DESC', [match.id, match.vote_attempt])).rows;
-  const tied = totals.length > 1 && totals[0].total === totals[1].total;
-  if (tied && match.vote_attempt === 1) await client.query("UPDATE party_matchups SET vote_attempt=2,status='revote' WHERE id=$1", [match.id]);
-  else if (tied) await client.query("UPDATE party_matchups SET status='host_tiebreak' WHERE id=$1", [match.id]);
-  else await completeMatch(client, room, match, totals[0].song_id);
+  const totals = (await client.query(`SELECT v.song_id,count(*)::int total FROM party_votes v
+    JOIN party_players p ON p.id=v.player_id
+    WHERE v.matchup_id=$1 AND v.attempt=$2 AND p.active GROUP BY v.song_id ORDER BY total DESC`, [match.id, match.vote_attempt])).rows;
+  const decision = decideVote(totals, match.vote_attempt);
+  if (decision.outcome === 'revote') await client.query("UPDATE party_matchups SET vote_attempt=2,status='revote' WHERE id=$1", [match.id]);
+  else if (decision.outcome === 'tiebreak') await client.query("UPDATE party_matchups SET status='host_tiebreak' WHERE id=$1", [match.id]);
+  else if (decision.outcome === 'win') await completeMatch(client, room, match, decision.songId);
+  else return false;
   return true;
 }
 
@@ -349,7 +354,7 @@ async function route(request, response) {
   if (action === 'open-voting' && request.method === 'POST') { const { room } = await hostRoom(request); const changed = await getPool().query("UPDATE party_matchups SET status='voting' WHERE id=$1 AND played_a AND played_b AND status='listening' RETURNING id", [room.current_matchup_id]); if (!changed.rowCount) throw new HttpError(409, 'Play both songs before opening voting.', 'songs_not_played'); await getPool().query('UPDATE party_rooms SET version=version+1 WHERE id=$1', [room.id]); return json(response, 200, await fetchState(room.id, 'host')); }
   if (action === 'vote' && request.method === 'POST') return vote(request, response);
   if (action === 'tie-break' && request.method === 'POST') { const { room } = await hostRoom(request); await transaction(async (client) => { const lockedRoom = (await client.query('SELECT * FROM party_rooms WHERE id=$1 FOR UPDATE', [room.id])).rows[0]; const match = (await client.query('SELECT * FROM party_matchups WHERE id=$1 FOR UPDATE', [lockedRoom.current_matchup_id])).rows[0]; if (match.status !== 'host_tiebreak') throw new HttpError(409, 'This matchup does not need a tie-break.', 'tie_break_unavailable'); await completeMatch(client, lockedRoom, match, body(request).songId); }); return json(response, 200, await fetchState(room.id, 'host')); }
-  if (action === 'advance' && request.method === 'POST') { const { room } = await hostRoom(request); const current = (await getPool().query('SELECT * FROM party_matchups WHERE id=$1', [room.current_matchup_id])).rows[0]; if (current?.status !== 'complete') throw new HttpError(409, 'Finish the current matchup first.', 'matchup_incomplete'); const next = (await getPool().query("SELECT id FROM party_matchups WHERE room_id=$1 AND status='ready' ORDER BY round,position LIMIT 1", [room.id])).rows[0]; if (!next) throw new HttpError(409, 'The next matchup is not ready.', 'next_matchup_unavailable'); await getPool().query('UPDATE party_rooms SET current_matchup_id=$1,version=version+1 WHERE id=$2', [next.id, room.id]); return json(response, 200, await fetchState(room.id, 'host')); }
+  if (action === 'advance' && request.method === 'POST') { const { room } = await hostRoom(request); await transaction(async (client) => { const lockedRoom = (await client.query('SELECT * FROM party_rooms WHERE id=$1 FOR UPDATE', [room.id])).rows[0]; const current = (await client.query('SELECT * FROM party_matchups WHERE id=$1', [lockedRoom.current_matchup_id])).rows[0]; if (current?.status !== 'complete') throw new HttpError(409, 'Finish the current matchup first.', 'matchup_incomplete'); const next = (await client.query("SELECT id FROM party_matchups WHERE room_id=$1 AND status='ready' ORDER BY round,position LIMIT 1 FOR UPDATE", [lockedRoom.id])).rows[0]; if (!next) throw new HttpError(409, 'The next matchup is not ready.', 'next_matchup_unavailable'); await client.query('UPDATE party_rooms SET current_matchup_id=$1,version=version+1 WHERE id=$2', [next.id, lockedRoom.id]); }); return json(response, 200, await fetchState(room.id, 'host')); }
   if (action === 'replace' && request.method === 'POST') { const { session, room } = await hostRoom(request); const side = body(request).side; if (!['a','b'].includes(side)) throw new HttpError(400, 'Invalid song side.', 'invalid_side'); const match = (await getPool().query('SELECT * FROM party_matchups WHERE id=$1', [room.current_matchup_id])).rows[0]; if (!['ready','listening'].includes(match.status)) throw new HttpError(409, 'This track can no longer be replaced.', 'replacement_closed'); const songId = side === 'a' ? match.song_a_id : match.song_b_id; const excluded = new Set((await getPool().query('SELECT track_id FROM party_songs WHERE room_id=$1', [room.id])).rows.map((r) => r.track_id)); const [replacement] = await randomTracks(session.spotify_user_id, 1, excluded); await transaction(async (client) => { await tracks.upsert(client, replacement, null, false); await client.query("UPDATE party_songs SET track_id=$1,source='replacement' WHERE id=$2", [replacement.id, songId]); await client.query(`UPDATE party_matchups SET played_${side}=false,status='ready' WHERE id=$1`, [match.id]); await client.query('UPDATE party_rooms SET version=version+1 WHERE id=$1', [room.id]); }); return json(response, 200, await fetchState(room.id, 'host')); }
   if (action === 'replay' && request.method === 'POST') { const { room } = await hostRoom(request); await transaction(async (client) => { await client.query('DELETE FROM party_votes WHERE room_id=$1', [room.id]); await client.query('DELETE FROM party_matchups WHERE room_id=$1', [room.id]); await client.query('DELETE FROM party_songs WHERE room_id=$1', [room.id]); await client.query('UPDATE party_players SET ready=false,active=true WHERE room_id=$1', [room.id]); await client.query("UPDATE party_rooms SET phase='picking',bracket_size=null,random_count=null,current_matchup_id=null,version=version+1,expires_at=now()+interval '24 hours' WHERE id=$1", [room.id]); }); return json(response, 200, await fetchState(room.id, 'host')); }
   if (action === 'end' && request.method === 'POST') { const { room } = await hostRoom(request); await getPool().query("UPDATE party_rooms SET phase='ended',version=version+1 WHERE id=$1", [room.id]); return json(response, 200, { ended: true }); }

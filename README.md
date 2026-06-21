@@ -22,7 +22,7 @@ Spotify Premium is required only for the Host. Guest players do not authenticate
 4. Apply migrations with `npm run db:migrate`.
 5. Run `npm run dev` and open `http://127.0.0.1:3000`.
 
-For production, set `APP_URL` to the final HTTPS origin, register its `/api/auth/callback`, apply migrations to the production Neon database, and redeploy. The app accepts either `DATABASE_URL` or Vercel Neon's generated `POSTGRES_URL`; migrations prefer `POSTGRES_URL_NON_POOLING` or `DATABASE_URL_UNPOOLED`. `/api/health` checks configuration, database access, and the party schema without exposing secrets.
+For production, set `APP_URL` to the final HTTPS origin (it is required in production — the server will not fall back to request headers), register its `/api/auth/callback`, apply migrations to the production Neon database, and redeploy. The app accepts either `DATABASE_URL` or Vercel Neon's generated `POSTGRES_URL`; migrations prefer `POSTGRES_URL_NON_POOLING` or `DATABASE_URL_UNPOOLED`. `/api/health` checks configuration, database access, and the party schema without exposing secrets.
 
 ## Game rules
 
@@ -35,7 +35,7 @@ For production, set `APP_URL` to the final HTTPS origin, register its `/api/auth
 - Curators score one point for each matchup won by an owned song.
 - Rooms expire after 24 hours.
 
-Legacy Elo, nomination, playlist, and tournament tables remain in the database for rollback, but their routes and UI are no longer active.
+Legacy Elo, nomination, playlist, and tournament tables remain in the database for rollback, but their API routes and UI have been removed (recoverable from git history).
 
 ## Tests
 

@@ -34,10 +34,18 @@ function requiredAppUrl(request) {
       throw new HttpError(503, 'APP_URL must be a complete URL such as https://spotifycoding.vercel.app.', 'server_configuration');
     }
   }
+  // In production, never trust the forwarded host header to build OAuth/redirect URLs.
+  if (process.env.VERCEL_ENV === 'production') throw new HttpError(503, 'APP_URL must be configured in production.', 'server_configuration');
   const host = request?.headers?.['x-forwarded-host'] || request?.headers?.host;
   const protocol = request?.headers?.['x-forwarded-proto'] || (process.env.VERCEL ? 'https' : 'http');
   if (host) return `${protocol}://${host}`;
   throw new HttpError(503, 'APP_URL is not configured for this deployment.', 'server_configuration');
+}
+
+function validateFetchSite(request) {
+  // Browsers send Sec-Fetch-Site on fetch requests; reject anything not same-origin.
+  const site = request.headers['sec-fetch-site'];
+  if (site && site !== 'same-origin' && site !== 'none') throw new HttpError(403, 'Invalid request origin.', 'invalid_origin');
 }
 
 function cookies(request) {
@@ -54,4 +62,4 @@ function cookie(name, value, options = {}) {
   return parts.join('; ');
 }
 
-module.exports = { cookie, cookies, handler, json, requiredAppUrl, validateOrigin };
+module.exports = { cookie, cookies, handler, json, requiredAppUrl, validateFetchSite, validateOrigin };
