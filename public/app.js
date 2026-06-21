@@ -1,296 +1,128 @@
-const loginButton = document.querySelector('#login');
-const accountName = document.querySelector('#account-name');
-const joinPanel = document.querySelector('#join-panel');
-const joinForm = document.querySelector('#join-form');
-const joinStatus = document.querySelector('#join-status');
-const battleSection = document.querySelector('#battle-section');
-const battleArena = document.querySelector('#battle-arena');
-const battleStatus = document.querySelector('#battle-status');
-const battleGenre = document.querySelector('#battle-genre');
-const battleDecade = document.querySelector('#battle-decade');
-const battleRanking = document.querySelector('#battle-ranking');
-const battleEmpty = document.querySelector('#battle-empty');
-const resetButton = document.querySelector('#battle-reset');
-const playerBar = document.querySelector('#player');
-const playerTrack = document.querySelector('#player-track');
-const playerArtist = document.querySelector('#player-artist');
-const playerCover = document.querySelector('#player-cover');
-const togglePlay = document.querySelector('#toggle-play');
-const seekInput = document.querySelector('#seek');
-const elapsedTime = document.querySelector('#elapsed');
-const durationTime = document.querySelector('#duration');
-const volumeInput = document.querySelector('#volume');
+const $ = (selector, root = document) => root.querySelector(selector);
+const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+let viewer, currentBattle, battleRound = 0, activeSetup, standings = [], nominations = [], importedPlaylists = [], selectedTournament;
+let spotifyPlayer, playerDeviceId, playerLoading, tokenCache, playbackPosition = 0, playbackDuration = 0, playbackPaused = true, playbackUpdatedAt = Date.now(), isSeeking = false;
 
-let viewer;
-let currentBattle;
-let battleRound = 0;
-let activeFilters = { genre: 'all', decade: 'all' };
-let spotifyPlayer;
-let playerDeviceId;
-let playerLoading;
-let tokenCache;
-let playbackPosition = 0;
-let playbackDuration = 0;
-let playbackPaused = true;
-let playbackUpdatedAt = Date.now();
-let isSeeking = false;
+await initialise();
 
-await initialiseApp();
+$('#login').addEventListener('click', async () => { if (!viewer?.authenticated) return location.assign('/api/auth/login'); await api('/api/auth/logout', { method: 'POST' }); location.reload(); });
+$('#join-form').addEventListener('submit', async (event) => { event.preventDefault(); setText('#join-status', 'Joining…'); try { const result = await api('/api/group/join', { method: 'POST', body: { inviteCode: $('#invite-code').value } }); viewer.membership = result.membership; showMemberApp(); } catch (error) { setText('#join-status', error.message); } });
+$$('#tabs button').forEach((button) => button.addEventListener('click', () => showTab(button.dataset.tab)));
+$$('[data-go]').forEach((button) => button.addEventListener('click', () => showTab(button.dataset.go)));
 
-loginButton.addEventListener('click', async () => {
-  if (!viewer?.authenticated) return location.assign('/api/auth/login');
-  await api('/api/auth/logout', { method: 'POST' });
-  location.reload();
-});
+$('#battle-source').addEventListener('change', updateBattleSetup);
+$('#curated-type').addEventListener('change', updateBattleSetup);
+$('#battle-start').addEventListener('click', () => startBattle());
+$$('.battle-card').forEach((card) => { const side = card.dataset.side; $('.battle-play', card).addEventListener('click', () => currentBattle && playTrack(currentBattle[side].uri)); $('.battle-pick', card).addEventListener('click', () => chooseWinner(side)); });
 
-joinForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  joinStatus.textContent = 'Joining…';
-  try {
-    const result = await api('/api/group/join', { method: 'POST', body: { inviteCode: document.querySelector('#invite-code').value } });
-    viewer.membership = result.membership;
-    showMemberApp();
-  } catch (error) {
-    joinStatus.textContent = error.message;
-  }
-});
+$('#battle-reset').addEventListener('click', async () => { if (!confirm('Reset all shared ratings and vote history for everyone?')) return; try { await api('/api/standings/reset', { method: 'POST' }); currentBattle = null; $('#battle-arena').hidden = true; await loadStandings(); } catch (error) { setText('#battle-status', error.message); } });
+$('#export-standings').addEventListener('click', () => exportPlaylist({ type: 'standings' }));
 
-document.querySelector('#battle-start').addEventListener('click', () => startBattle());
-for (const card of document.querySelectorAll('.battle-card')) {
-  const side = card.dataset.side;
-  card.querySelector('.battle-play').addEventListener('click', () => currentBattle && playTrack(currentBattle[side].uri));
-  card.querySelector('.battle-pick').addEventListener('click', () => chooseWinner(side));
-}
+$('#nomination-search').addEventListener('submit', async (event) => { event.preventDefault(); await searchSpotify($('#nomination-query').value, '#nomination-results', async (track) => { await api('/api/nominations/add', { method: 'POST', body: { trackId: track.id } }); await loadNominations(); }); });
+$('#browse-playlists').addEventListener('click', browseSpotifyPlaylists);
+$('#import-playlist').addEventListener('click', importPlaylist);
 
-resetButton.addEventListener('click', async () => {
-  if (!confirm('Reset all shared ratings and vote history for everyone?')) return;
-  try {
-    await api('/api/standings/reset', { method: 'POST' });
-    currentBattle = null;
-    battleArena.hidden = true;
-    battleStatus.textContent = 'Shared standings reset. Start a new battle.';
-    await loadStandings();
-  } catch (error) {
-    battleStatus.textContent = error.message;
-  }
-});
+$('#tournament-create').addEventListener('submit', async (event) => { event.preventDefault(); try { const result = await api('/api/tournaments/create', { method: 'POST', body: { name: $('#tournament-name').value, size: Number($('#tournament-size').value) } }); $('#tournament-name').value = ''; await loadTournaments(result.id); } catch (error) { setText('#tournament-status', error.message); } });
 
-togglePlay.addEventListener('click', () => spotifyPlayer?.togglePlay());
-document.querySelector('#previous').addEventListener('click', () => spotifyPlayer?.previousTrack());
-document.querySelector('#next').addEventListener('click', () => spotifyPlayer?.nextTrack());
-document.querySelector('#back-15').addEventListener('click', () => seekRelative(-15000));
-document.querySelector('#forward-15').addEventListener('click', () => seekRelative(15000));
-seekInput.addEventListener('input', () => { isSeeking = true; elapsedTime.textContent = formatTime(Number(seekInput.value)); });
-seekInput.addEventListener('change', async () => {
-  if (!spotifyPlayer) return;
-  const position = Number(seekInput.value);
-  await spotifyPlayer.seek(position);
-  playbackPosition = position; playbackUpdatedAt = Date.now(); isSeeking = false;
-});
-volumeInput.addEventListener('input', () => spotifyPlayer?.setVolume(Number(volumeInput.value) / 100));
-setInterval(updateTimeline, 500);
+wirePlayer();
 
-async function initialiseApp() {
-  try {
-    viewer = await api('/api/me');
-  } catch (error) {
-    battleStatus.textContent = error.message;
-    return;
-  }
-  if (!viewer.authenticated) {
-    loginButton.textContent = 'Connect Spotify';
-    return;
-  }
-  accountName.textContent = viewer.user.displayName;
-  loginButton.textContent = 'Disconnect';
-  initialisePlayer().catch(showPlaybackError);
-  if (viewer.membership) showMemberApp(); else joinPanel.hidden = false;
+async function initialise() {
+  try { viewer = await api('/api/me'); } catch (error) { return; }
+  if (!viewer.authenticated) return;
+  setText('#account-name', viewer.user.displayName); setText('#login', 'Disconnect'); initialisePlayer().catch(showPlaybackError);
+  if (viewer.membership) showMemberApp(); else $('#join-panel').hidden = false;
 }
 
 function showMemberApp() {
-  joinPanel.hidden = true;
-  battleSection.hidden = false;
-  resetButton.hidden = !viewer.membership.isOwner;
-  loadStandings();
-  if (!window.standingsPoll) window.standingsPoll = setInterval(loadStandings, 30000);
+  $('#join-panel').hidden = true; $('#hero').hidden = true; $('#tabs').hidden = false; $('#battle-reset').hidden = !viewer.membership.isOwner;
+  showTab('battle'); refreshGroupData(); loadTournaments();
+  if (!window.groupPoll) window.groupPoll = setInterval(() => { loadStandings(); loadTournaments(selectedTournament?.id); }, 30000);
+}
+
+function showTab(name) {
+  $$('.view').forEach((view) => view.hidden = view.id !== `${name}-view`); $$('#tabs button').forEach((button) => button.classList.toggle('active', button.dataset.tab === name));
+  if (name === 'group') refreshGroupData(); if (name === 'tournaments') loadTournaments(selectedTournament?.id);
+}
+
+function updateBattleSetup() {
+  const mode = $('#battle-source').value; const curated = mode !== 'random';
+  $$('.curated-control').forEach((element) => element.hidden = !curated);
+  $$('.playlist-control').forEach((element) => element.hidden = !curated || $('#curated-type').value !== 'playlist');
+  $$('.random-control').forEach((element) => element.hidden = mode === 'curated');
 }
 
 async function startBattle(previousBattleId = null) {
-  const button = document.querySelector('#battle-start');
-  button.disabled = true;
+  const button = $('#battle-start'); button.disabled = true;
   if (!previousBattleId) {
-    activeFilters = { genre: battleGenre.value, decade: battleDecade.value };
+    activeSetup = { genre: $('#battle-genre').value, decade: $('#battle-decade').value, sourceMode: $('#battle-source').value, curatedSourceType: $('#battle-source').value === 'random' ? null : $('#curated-type').value, playlistId: $('#curated-type').value === 'playlist' && $('#battle-source').value !== 'random' ? $('#battle-playlist').value : null };
     battleRound = 1;
   }
-  battleStatus.textContent = previousBattleId ? 'Finding a new challenger…' : 'Finding two songs…';
-  try {
-    const result = await api('/api/battles', { method: 'POST', body: { ...activeFilters, previousBattleId } });
-    currentBattle = result.battle;
-    renderBattle();
-    battleArena.hidden = false;
-    button.textContent = 'Restart battle';
-    battleStatus.textContent = `Round ${battleRound} · ${filterLabel()}`;
-  } catch (error) {
-    battleStatus.textContent = error.message;
-  } finally {
-    button.disabled = false;
-    setPickButtons(false);
-  }
+  setText('#battle-status', previousBattleId ? 'Finding a new challenger…' : 'Finding two songs…');
+  try { const result = await api('/api/battles', { method: 'POST', body: { ...activeSetup, previousBattleId } }); currentBattle = result.battle; renderBattle(); $('#battle-arena').hidden = false; setText('#battle-start', 'Restart battle'); setText('#battle-status', `Round ${battleRound} · ${sourceLabel()}`); }
+  catch (error) { setText('#battle-status', error.message); }
+  finally { button.disabled = false; setPickButtons(false); }
 }
 
 async function chooseWinner(side) {
-  if (!currentBattle) return;
-  const winner = currentBattle[side];
-  setPickButtons(true);
-  battleStatus.textContent = `Recording ${winner.name} as the winner…`;
-  try {
-    await api(`/api/battles/${currentBattle.id}/vote`, { method: 'POST', body: { winnerId: winner.id } });
-    const previousId = currentBattle.id;
-    currentBattle = null;
-    battleRound += 1;
-    await loadStandings();
-    await startBattle(previousId);
-  } catch (error) {
-    battleStatus.textContent = error.message;
-    setPickButtons(false);
-  }
+  if (!currentBattle) return; const winner = currentBattle[side]; setPickButtons(true); setText('#battle-status', `Recording ${winner.name}…`);
+  try { await api(`/api/battles/${currentBattle.id}/vote`, { method: 'POST', body: { winnerId: winner.id } }); const id = currentBattle.id; currentBattle = null; battleRound += 1; await loadStandings(); await startBattle(id); }
+  catch (error) { setText('#battle-status', error.message); setPickButtons(false); }
 }
 
-function renderBattle() {
-  for (const side of ['left', 'right']) {
-    const track = currentBattle[side];
-    const card = battleArena.querySelector(`[data-side="${side}"]`);
-    const image = card.querySelector('img');
-    image.src = track.image; image.alt = `${track.album} cover`;
-    card.querySelector('h3').textContent = track.name;
-    card.querySelector('.battle-artist').textContent = track.artist;
-    card.querySelector('a').href = track.url;
-    card.querySelector('.battle-play').ariaLabel = `Play ${track.name}`;
-    card.querySelector('.battle-pick').ariaLabel = `Pick ${track.name} as winner`;
-  }
+function renderBattle() { for (const side of ['left', 'right']) { const track = currentBattle[side]; const card = $(`[data-side="${side}"]`, $('#battle-arena')); const image = $('img', card); image.src = track.image; image.alt = `${track.album} cover`; setText('h3', track.name, card); setText('.artist', track.artist, card); $('a', card).href = track.url; } }
+function sourceLabel() { const labels = { random: 'Random discovery', curated: 'Curated', mixed: 'Mixed' }; return `${labels[activeSetup.sourceMode]} · ${activeSetup.genre} · ${activeSetup.decade === 'all' ? 'all decades' : `${activeSetup.decade}s`}`; }
+function setPickButtons(disabled) { $$('.battle-pick').forEach((button) => button.disabled = disabled); }
+
+async function refreshGroupData() { await Promise.allSettled([loadStandings(), loadNominations(), loadImportedPlaylists(), loadStats()]); }
+async function loadStandings() { try { standings = (await api('/api/standings')).standings; renderRanking('#battle-ranking', standings); renderRanking('#top-ranking', standings.slice(0, 5)); $('#battle-empty').hidden = standings.length > 0; $('#top-empty').hidden = standings.length > 0; } catch {} }
+function renderRanking(selector, songs) { const list = $(selector); list.replaceChildren(); songs.forEach((song) => { const item = document.createElement('li'); item.innerHTML = `<img src="${escapeHtml(song.image)}" alt=""><div><a href="${escapeHtml(song.url)}" target="_blank" rel="noreferrer">${escapeHtml(song.name)}</a><span>${escapeHtml(song.artist)}</span></div><button class="play-mini" aria-label="Play">▶</button><div class="record">${song.wins}–${song.losses}<small>${song.rating} Elo</small></div>`; $('.play-mini', item).addEventListener('click', () => playTrack(song.uri)); list.append(item); }); }
+
+async function loadNominations() { try { nominations = (await api('/api/nominations')).nominations; const list = $('#nomination-list'); list.replaceChildren(); nominations.forEach((track) => list.append(trackRow(track, track.can_remove ? { label: 'Remove', action: async () => { await api('/api/nominations/remove', { method: 'POST', body: { trackId: track.id } }); loadNominations(); } } : null, `Picked by ${track.nominated_by_name}`))); } catch {} }
+async function searchSpotify(query, target, action) { const root = $(target); root.innerHTML = '<p class="muted">Searching…</p>'; try { const tracks = (await api(`/api/search?q=${encodeURIComponent(query)}`)).tracks; root.replaceChildren(); tracks.forEach((track) => root.append(trackRow(track, { label: 'Add', action: () => action(track) }))); } catch (error) { root.innerHTML = `<p class="muted">${escapeHtml(error.message)}</p>`; } }
+function trackRow(track, button, subtitle = track.artist) { const row = document.createElement('div'); row.className = 'row-track'; row.innerHTML = `<img src="${escapeHtml(track.image || '')}" alt=""><div class="copy"><strong>${escapeHtml(track.name)}</strong><small>${escapeHtml(subtitle || '')}</small></div><button class="play-mini">▶</button>`; $('.play-mini', row).addEventListener('click', () => playTrack(track.uri)); if (button) { const action = document.createElement('button'); action.textContent = button.label; action.addEventListener('click', async () => { action.disabled = true; try { await button.action(); } catch (error) { alert(error.message); } finally { action.disabled = false; } }); row.append(action); } return row; }
+
+async function browseSpotifyPlaylists() { try { setText('#browse-playlists', 'Loading…'); const playlists = (await api('/api/playlists/spotify')).playlists; const select = $('#spotify-playlists'); select.replaceChildren(...playlists.map((playlist) => new Option(`${playlist.name} · ${playlist.tracks} tracks`, playlist.id))); $('#spotify-playlist-picker').hidden = false; } catch (error) { alert(`${error.message} Disconnect and reconnect Spotify if playlist permission is missing.`); } finally { setText('#browse-playlists', 'Browse my Spotify playlists'); } }
+async function importPlaylist() { if (!$('#playlist-confirm').checked) return alert('Confirm that the playlist snapshot may be shared with the group.'); try { await api('/api/playlists/import', { method: 'POST', body: { spotifyPlaylistId: $('#spotify-playlists').value } }); $('#playlist-confirm').checked = false; await loadImportedPlaylists(); } catch (error) { alert(error.message); } }
+async function loadImportedPlaylists() { try { importedPlaylists = (await api('/api/playlists')).playlists; for (const selector of ['#battle-playlist']) { const select = $(selector); select.replaceChildren(...importedPlaylists.map((playlist) => new Option(`${playlist.name} · ${playlist.track_count}`, playlist.id))); } const list = $('#playlist-list'); list.replaceChildren(); importedPlaylists.forEach((playlist) => { const row = document.createElement('div'); row.className = 'list-button'; row.innerHTML = `<span><strong>${escapeHtml(playlist.name)}</strong><small>${playlist.track_count} tracks · by ${escapeHtml(playlist.imported_by_name)}</small></span>`; if (playlist.can_refresh) row.append(smallButton('Refresh', async () => { await api('/api/playlists/refresh', { method: 'POST', body: { playlistId: playlist.id } }); loadImportedPlaylists(); })); if (playlist.can_remove) row.append(smallButton('Remove', async () => { await api('/api/playlists/remove', { method: 'POST', body: { playlistId: playlist.id } }); loadImportedPlaylists(); })); list.append(row); }); updateBattleSetup(); } catch {} }
+async function exportPlaylist(body) { try { const result = await api('/api/playlists/export', { method: 'POST', body }); if (confirm(`${result.playlist.name} created. Open it in Spotify?`)) open(result.playlist.url, '_blank', 'noopener'); } catch (error) { alert(`${error.message} You may need to disconnect and reconnect Spotify.`); } }
+
+async function loadStats() { try { const data = await api('/api/stats'); const members = $('#member-stats'); members.replaceChildren(); data.members.forEach((member) => { const card = document.createElement('article'); card.className = 'stat-card'; card.innerHTML = `<h4>${escapeHtml(member.name)}</h4><p>${member.totalVotes} votes · ${member.tournamentVotes} tournament</p><p>Top song: ${escapeHtml(member.favouriteTrack?.name || 'Not enough votes')}</p><p>Top artist: ${escapeHtml(member.favouriteArtist || '—')}</p><p>Biggest upset: ${member.biggestUpset ? `${escapeHtml(member.biggestUpset.winner.name)} (+${member.biggestUpset.difference})` : '—'}</p>`; members.append(card); }); const agreement = $('#agreement-stats'); agreement.replaceChildren(); data.agreement.forEach((pair) => { const item = document.createElement('div'); item.className = 'agreement'; item.textContent = `${pair.left.name} + ${pair.right.name}: ${pair.percentage === null ? 'not enough overlap' : `${pair.percentage}%`}`; agreement.append(item); }); } catch {} }
+
+async function loadTournaments(preferredId) { try { const rows = (await api('/api/tournaments')).tournaments; const list = $('#tournament-list'); list.replaceChildren(); rows.forEach((tournament) => { const button = document.createElement('button'); button.className = `list-button ${selectedTournament?.id === tournament.id ? 'active' : ''}`; button.innerHTML = `<span><strong>${escapeHtml(tournament.name)}</strong><small>${tournament.status} · ${tournament.entry_count}/${tournament.size}${tournament.champion_name ? ` · ${escapeHtml(tournament.champion_name)}` : ''}</small></span>`; button.addEventListener('click', () => openTournament(tournament.id)); list.append(button); }); const id = preferredId || selectedTournament?.id || rows.find((row) => ['active', 'draft'].includes(row.status))?.id; if (id) await openTournament(id, false); } catch (error) { setText('#tournament-status', error.message); } }
+async function openTournament(id, reloadList = true) { selectedTournament = (await api(`/api/tournaments/detail?id=${encodeURIComponent(id)}`)).tournament; renderTournament(); if (reloadList) loadTournaments(id); }
+
+function renderTournament() {
+  const t = selectedTournament; const root = $('#tournament-detail'); root.replaceChildren();
+  const head = document.createElement('div'); head.className = 'section-title compact'; head.innerHTML = `<div><h3>${escapeHtml(t.name)}</h3><p class="muted">${t.status} · ${t.entries.length}/${t.size} songs · by ${escapeHtml(t.creator_name)}</p></div>`; root.append(head);
+  if (t.status === 'draft') return renderDraft(root, t);
+  if (t.status === 'cancelled') return root.append(Object.assign(document.createElement('p'), { className: 'empty', textContent: 'This tournament was cancelled.' }));
+  const bracket = document.createElement('div'); bracket.className = 'bracket'; const rounds = Math.log2(t.size);
+  for (let round = 1; round <= rounds; round += 1) { const column = document.createElement('div'); column.className = 'round'; column.innerHTML = `<h4>${round === rounds ? 'Final' : `Round ${round}`}</h4>`; t.matchups.filter((match) => match.round === round).forEach((match) => column.append(renderMatch(match, t))); bracket.append(column); }
+  root.append(bracket); if (t.status === 'completed') { const champ = t.entries.find((entry) => entry.id === t.champion_track_id); const message = document.createElement('h3'); message.textContent = `Champion: ${champ?.name || 'Winner'}`; root.prepend(message); root.append(smallButton('Export tournament playlist', () => exportPlaylist({ type: 'tournament', tournamentId: t.id }))); }
+  if (t.can_manage && t.status === 'active') root.append(smallButton('Cancel tournament', async () => { if (confirm('Cancel this tournament?')) { await api('/api/tournaments/cancel', { method: 'POST', body: { tournamentId: t.id } }); loadTournaments(t.id); } }));
 }
 
-async function loadStandings() {
-  if (!viewer?.membership) return;
-  try {
-    const result = await api('/api/standings');
-    renderStandings(result.standings);
-  } catch (error) {
-    if (error.status === 401) location.reload();
-  }
+function renderDraft(root, t) {
+  const tools = document.createElement('div'); tools.innerHTML = `<form class="inline-form draft-search"><input placeholder="Search for a track"><button>Search</button></form><div class="draft-results stack"></div><div class="setup-card"><label>Fill from<select class="fill-source"><option value="nominations">Nominations</option><option value="playlist">Imported playlist</option><option value="random">Random discovery</option></select></label><label>Playlist<select class="fill-playlist">${importedPlaylists.map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('')}</select></label><button class="fill-button" type="button">Fill remaining</button></div><div class="draft-entries stack"></div>`; root.append(tools);
+  const entryList = $('.draft-entries', tools); t.entries.forEach((entry) => entryList.append(trackRow(entry, t.can_manage ? { label: 'Remove', action: async () => { await api('/api/tournaments/remove', { method: 'POST', body: { tournamentId: t.id, trackId: entry.id } }); openTournament(t.id); } } : null)));
+  $('.draft-search', tools).addEventListener('submit', async (event) => { event.preventDefault(); const query = $('input', event.currentTarget).value; await searchSpotify(query, '.draft-results', async (track) => { await api('/api/tournaments/add', { method: 'POST', body: { tournamentId: t.id, trackId: track.id } }); await openTournament(t.id); }); });
+  $('.fill-button', tools).addEventListener('click', async () => { try { await api('/api/tournaments/fill', { method: 'POST', body: { tournamentId: t.id, source: $('.fill-source', tools).value, playlistId: $('.fill-playlist', tools).value, genre: $('#battle-genre').value, decade: $('#battle-decade').value } }); await openTournament(t.id); } catch (error) { alert(error.message); } });
+  if (t.can_manage) { const start = smallButton('Start tournament', async () => { await api('/api/tournaments/start', { method: 'POST', body: { tournamentId: t.id } }); loadTournaments(t.id); }); start.disabled = t.entries.length !== t.size; root.append(start, smallButton('Cancel draft', async () => { await api('/api/tournaments/cancel', { method: 'POST', body: { tournamentId: t.id } }); loadTournaments(t.id); })); }
 }
 
-function renderStandings(standings) {
-  battleRanking.replaceChildren();
-  for (const song of standings) {
-    const item = document.createElement('li');
-    const image = Object.assign(document.createElement('img'), { src: song.image, alt: '' });
-    const copy = document.createElement('div');
-    const link = Object.assign(document.createElement('a'), { href: song.url, target: '_blank', rel: 'noreferrer', textContent: song.name });
-    link.style.color = 'inherit';
-    copy.append(link, Object.assign(document.createElement('span'), { textContent: song.artist }));
-    const play = Object.assign(document.createElement('button'), { className: 'play-button', textContent: '▶', ariaLabel: `Play ${song.name}` });
-    play.addEventListener('click', () => playTrack(song.uri));
-    const record = document.createElement('div');
-    record.className = 'battle-record';
-    record.append(`${song.wins}–${song.losses}`, Object.assign(document.createElement('small'), { textContent: `${song.rating} Elo` }));
-    item.append(image, copy, play, record);
-    battleRanking.append(item);
-  }
-  battleEmpty.hidden = standings.length > 0;
-}
+function renderMatch(match, t) { const box = document.createElement('article'); box.className = 'match'; const left = document.createElement('button'); const right = document.createElement('button'); left.innerHTML = `<span>${escapeHtml(match.left_name || 'TBD')}</span><span>${match.left_votes}</span>`; right.innerHTML = `<span>${escapeHtml(match.right_name || 'TBD')}</span><span>${match.right_votes}</span>`; if (match.winner_track_id === match.left_track_id) left.classList.add('selected'); if (match.winner_track_id === match.right_track_id) right.classList.add('selected'); const vote = async (winnerId) => { try { await api('/api/tournaments/vote', { method: 'POST', body: { matchupId: match.id, winnerId } }); await openTournament(t.id); await loadStandings(); } catch (error) { alert(error.message); } }; left.addEventListener('click', () => vote(match.left_track_id)); right.addEventListener('click', () => vote(match.right_track_id)); const disabled = match.status !== 'open' || match.has_voted; left.disabled = disabled || !match.left_track_id; right.disabled = disabled || !match.right_track_id; box.append(left, right, Object.assign(document.createElement('div'), { className: 'meta', textContent: `${match.vote_count}/${t.electorate} votes${match.has_voted ? ' · voted' : ''}` })); if (t.can_manage && match.status === 'open' && match.vote_count >= Math.min(2, t.electorate)) box.append(smallButton('Close matchup', async () => { let winnerId; if (match.left_votes === match.right_votes) { const choice = prompt('Tie-break: type L for left or R for right'); winnerId = choice?.toLowerCase() === 'l' ? match.left_track_id : choice?.toLowerCase() === 'r' ? match.right_track_id : null; } await api('/api/tournaments/close', { method: 'POST', body: { matchupId: match.id, winnerId } }); openTournament(t.id); })); return box; }
 
-async function api(url, options = {}) {
-  const response = await fetch(url, {
-    method: options.method || 'GET',
-    credentials: 'same-origin',
-    headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
-    body: options.body ? JSON.stringify(options.body) : undefined
-  });
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    const error = new Error(payload.message || 'The request failed.');
-    error.status = response.status;
-    throw error;
-  }
-  return response.status === 204 ? null : response.json();
-}
+function smallButton(label, action) { const button = document.createElement('button'); button.className = 'text-button'; button.textContent = label; button.addEventListener('click', async () => { button.disabled = true; try { await action(); } catch (error) { alert(error.message); } finally { button.disabled = false; } }); return button; }
+function setText(selector, text, root = document) { const element = $(selector, root); if (element) element.textContent = text; }
+function escapeHtml(value) { return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char])); }
+async function api(url, options = {}) { const response = await fetch(url, { method: options.method || 'GET', credentials: 'same-origin', headers: options.body ? { 'Content-Type': 'application/json' } : undefined, body: options.body ? JSON.stringify(options.body) : undefined }); if (!response.ok) { const payload = await response.json().catch(() => ({})); const error = new Error(payload.message || 'The request failed.'); error.status = response.status; throw error; } return response.status === 204 ? null : response.json(); }
 
-async function playbackToken() {
-  if (tokenCache?.expiresAt > Date.now() + 60000) return tokenCache.value;
-  const result = await api('/api/auth/token');
-  tokenCache = { value: result.accessToken, expiresAt: Date.now() + result.expiresIn * 1000 };
-  return tokenCache.value;
-}
-
-async function initialisePlayer() {
-  if (spotifyPlayer) return spotifyPlayer;
-  if (playerLoading) return playerLoading;
-  playerLoading = new Promise((resolve, reject) => {
-    window.onSpotifyWebPlaybackSDKReady = () => {
-      spotifyPlayer = new Spotify.Player({ name: 'Song Battle', getOAuthToken: (callback) => playbackToken().then(callback).catch(reject), volume: 0.7 });
-      spotifyPlayer.addListener('ready', ({ device_id }) => { playerDeviceId = device_id; playerBar.hidden = false; resolve(spotifyPlayer); });
-      spotifyPlayer.addListener('not_ready', () => { playerDeviceId = null; });
-      spotifyPlayer.addListener('authentication_error', () => reject(new Error('Spotify playback authentication expired. Reconnect Spotify.')));
-      spotifyPlayer.addListener('account_error', () => reject(new Error('Spotify playback requires Premium.')));
-      spotifyPlayer.addListener('initialization_error', ({ message }) => reject(new Error(message)));
-      spotifyPlayer.addListener('playback_error', ({ message }) => showPlaybackError(new Error(message)));
-      spotifyPlayer.addListener('player_state_changed', renderPlayerState);
-      spotifyPlayer.connect().then((connected) => { if (!connected) reject(new Error('Spotify could not create a browser player.')); });
-    };
-    if (window.Spotify) return window.onSpotifyWebPlaybackSDKReady();
-    const script = document.createElement('script');
-    script.src = 'https://sdk.scdn.co/spotify-player.js';
-    script.onerror = () => reject(new Error('Spotify playback could not be loaded.'));
-    document.head.append(script);
-  });
-  return playerLoading;
-}
-
-async function playTrack(uri) {
-  try {
-    await initialisePlayer();
-    await spotifyPlayer.activateElement();
-    if (!playerDeviceId) throw new Error('The player is not ready yet.');
-    const token = await playbackToken();
-    const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(playerDeviceId)}`, { method: 'PUT', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ uris: [uri] }) });
-    if (response.status === 403) throw new Error('Full playback requires Spotify Premium.');
-    if (!response.ok) throw new Error('Spotify could not start this song.');
-    playerBar.hidden = false;
-  } catch (error) { showPlaybackError(error); }
-}
-
-function renderPlayerState(state) {
-  if (!state) return;
-  const track = state.track_window.current_track;
-  playerTrack.textContent = track?.name || 'Ready to play';
-  playerArtist.textContent = track?.artists.map((artist) => artist.name).join(', ') || 'Choose a song';
-  playerCover.src = track?.album.images[0]?.url || '';
-  togglePlay.textContent = state.paused ? '▶' : 'Ⅱ';
-  playbackPosition = state.position; playbackDuration = state.duration; playbackPaused = state.paused; playbackUpdatedAt = Date.now();
-  updateTimeline(); playerBar.hidden = false;
-}
-
-async function seekRelative(change) {
-  if (!spotifyPlayer) return;
-  const state = await spotifyPlayer.getCurrentState();
-  if (!state) return;
-  const position = Math.max(0, Math.min(state.duration, state.position + change));
-  await spotifyPlayer.seek(position);
-  playbackPosition = position; playbackDuration = state.duration; playbackUpdatedAt = Date.now(); updateTimeline();
-}
-
-function updateTimeline() {
-  const position = Math.min(playbackPosition + (playbackPaused ? 0 : Date.now() - playbackUpdatedAt), playbackDuration);
-  if (!isSeeking) { seekInput.value = String(position); elapsedTime.textContent = formatTime(position); }
-  seekInput.max = String(Math.max(playbackDuration, 1)); durationTime.textContent = formatTime(playbackDuration);
-}
-
-function formatTime(milliseconds) { const seconds = Math.max(0, Math.floor(milliseconds / 1000)); return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`; }
-function filterLabel() {
-  const genre = Array.from(battleGenre.options).find((option) => option.value === activeFilters.genre)?.text || activeFilters.genre;
-  const decade = Array.from(battleDecade.options).find((option) => option.value === activeFilters.decade)?.text || activeFilters.decade;
-  return `${genre} · ${decade}`;
-}
-function setPickButtons(disabled) { for (const button of battleArena.querySelectorAll('.battle-pick')) button.disabled = disabled; }
-function showPlaybackError(error) { battleStatus.textContent = error.message || 'Spotify playback failed.'; }
+function wirePlayer() { $('#toggle-play').addEventListener('click', () => spotifyPlayer?.togglePlay()); $('#previous').addEventListener('click', () => spotifyPlayer?.previousTrack()); $('#next').addEventListener('click', () => spotifyPlayer?.nextTrack()); $('#back-15').addEventListener('click', () => seekRelative(-15000)); $('#forward-15').addEventListener('click', () => seekRelative(15000)); $('#seek').addEventListener('input', () => { isSeeking = true; setText('#elapsed', formatTime(Number($('#seek').value))); }); $('#seek').addEventListener('change', async () => { if (!spotifyPlayer) return; const position = Number($('#seek').value); try { await spotifyPlayer.seek(position); playbackPosition = position; playbackUpdatedAt = Date.now(); } catch (error) { showPlaybackError(error); } finally { isSeeking = false; } }); $('#volume').addEventListener('input', () => spotifyPlayer?.setVolume(Number($('#volume').value) / 100)); setInterval(updateTimeline, 500); }
+async function playbackToken() { if (tokenCache?.expiresAt > Date.now() + 60000) return tokenCache.value; const result = await api('/api/auth/token'); tokenCache = { value: result.accessToken, expiresAt: Date.now() + result.expiresIn * 1000 }; return tokenCache.value; }
+async function initialisePlayer() { if (spotifyPlayer) return spotifyPlayer; if (playerLoading) return playerLoading; playerLoading = new Promise((resolve, reject) => { window.onSpotifyWebPlaybackSDKReady = () => { spotifyPlayer = new Spotify.Player({ name: 'Song Battle', getOAuthToken: (callback) => playbackToken().then(callback).catch(reject), volume: .7 }); spotifyPlayer.addListener('ready', ({ device_id }) => { playerDeviceId = device_id; $('#player').hidden = false; resolve(spotifyPlayer); }); spotifyPlayer.addListener('not_ready', () => playerDeviceId = null); spotifyPlayer.addListener('authentication_error', () => reject(new Error('Reconnect Spotify.'))); spotifyPlayer.addListener('account_error', () => reject(new Error('Spotify playback requires Premium.'))); spotifyPlayer.addListener('player_state_changed', renderPlayerState); spotifyPlayer.connect().then((ok) => { if (!ok) reject(new Error('Spotify could not create a browser player.')); }); }; if (window.Spotify) return window.onSpotifyWebPlaybackSDKReady(); const script = document.createElement('script'); script.src = 'https://sdk.scdn.co/spotify-player.js'; script.onerror = () => reject(new Error('Spotify playback could not be loaded.')); document.head.append(script); }); return playerLoading; }
+async function playTrack(uri) { try { await initialisePlayer(); await spotifyPlayer.activateElement(); if (!playerDeviceId) throw new Error('The player is not ready.'); const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(playerDeviceId)}`, { method: 'PUT', headers: { Authorization: `Bearer ${await playbackToken()}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ uris: [uri] }) }); if (!response.ok) throw new Error(response.status === 403 ? 'Playback requires Spotify Premium.' : 'Spotify could not play this song.'); } catch (error) { showPlaybackError(error); } }
+function renderPlayerState(state) { if (!state) return; const track = state.track_window.current_track; setText('#player-track', track?.name || 'Ready'); setText('#player-artist', track?.artists.map((a) => a.name).join(', ') || 'Choose a song'); $('#player-cover').src = track?.album.images[0]?.url || ''; setText('#toggle-play', state.paused ? '▶' : 'Ⅱ'); playbackPosition = state.position; playbackDuration = state.duration; playbackPaused = state.paused; playbackUpdatedAt = Date.now(); updateTimeline(); }
+async function seekRelative(change) { try { if (!spotifyPlayer) throw new Error('The player is not ready.'); const state = await spotifyPlayer.getCurrentState(); const duration = state?.duration || playbackDuration; const cachedPosition = playbackPosition + (playbackPaused ? 0 : Date.now() - playbackUpdatedAt); const currentPosition = state?.position ?? cachedPosition; if (!duration) throw new Error('Start a song before seeking.'); const position = Math.max(0, Math.min(duration, currentPosition + change)); await spotifyPlayer.seek(position); playbackPosition = position; playbackDuration = duration; playbackUpdatedAt = Date.now(); updateTimeline(); } catch (error) { showPlaybackError(error); } }
+function updateTimeline() { const position = Math.min(playbackPosition + (playbackPaused ? 0 : Date.now() - playbackUpdatedAt), playbackDuration); if (!isSeeking) { $('#seek').value = String(position); setText('#elapsed', formatTime(position)); } $('#seek').max = String(Math.max(playbackDuration, 1)); setText('#duration', formatTime(playbackDuration)); }
+function formatTime(ms) { const seconds = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`; }
+function showPlaybackError(error) { const status = $$('.view').find((view) => !view.hidden)?.querySelector('.status'); if (status) status.textContent = error.message; }

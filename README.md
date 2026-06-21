@@ -1,6 +1,6 @@
 # Song Battle
 
-A private shared Spotify battle app. Friends compare semi-random songs, and every vote updates one group Elo leaderboard transactionally.
+A private shared Spotify battle app with random and curated battles, nominations, playlist snapshots, personal stats, and group tournaments. Every vote updates one group Elo leaderboard transactionally.
 
 ## Architecture
 
@@ -49,6 +49,8 @@ Requirements: Node.js 18+, npm, a Neon database, and a Spotify developer app.
 3. Run `npm run db:migrate` once against the production `DATABASE_URL`.
 4. Add `https://<production-domain>/api/auth/callback` to the Spotify app.
 5. Deploy. Spotify login on preview URLs is intentionally unsupported unless each preview callback is registered separately.
+
+After deploying the curated-playlist update, existing members must disconnect and reconnect once to grant the new private/collaborative playlist scopes. Playlist exports are created as private playlists in the exporting member's Spotify account.
 
 After deployment, open `/api/health`. It reports missing environment-variable names, database connectivity, schema readiness, and the exact Spotify callback URL without exposing any secret values.
 

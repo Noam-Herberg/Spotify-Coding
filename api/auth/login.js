@@ -8,7 +8,7 @@ module.exports = handler('GET', async (request, response) => {
   response.setHeader('Set-Cookie', cookie('spotify_oauth_state', state, { maxAge: 600 }));
   const params = new URLSearchParams({
     client_id: required('SPOTIFY_CLIENT_ID'), response_type: 'code', redirect_uri: redirectUri, state,
-    scope: 'streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state'
+    scope: 'streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state playlist-read-private playlist-read-collaborative playlist-modify-private'
   });
   response.redirect(302, `https://accounts.spotify.com/authorize?${params}`);
 });

@@ -39,4 +39,18 @@ async function getAccessToken(userId) {
   });
 }
 
-module.exports = { exchangeCode, getAccessToken, spotifyProfile };
+async function spotifyFetch(userId, path, options = {}) {
+  const token = await getAccessToken(userId);
+  const response = await fetch(`https://api.spotify.com/v1${path}`, {
+    ...options,
+    headers: { Authorization: `Bearer ${token}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) }
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    const message = response.status === 403 ? 'Reconnect Spotify to grant playlist access.' : payload.error?.message || 'Spotify could not complete this request.';
+    throw new HttpError(response.status === 429 ? 429 : 502, message, 'spotify_api_failed');
+  }
+  return response.status === 204 ? null : response.json();
+}
+
+module.exports = { exchangeCode, getAccessToken, spotifyFetch, spotifyProfile };

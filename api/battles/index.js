@@ -11,6 +11,10 @@ module.exports = handler('POST', async (request, response) => {
   if (!validateFilters(genre, decade)) throw new HttpError(400, 'Invalid battle filters.', 'invalid_filters');
   const previousBattleId = request.body?.previousBattleId || null;
   if (previousBattleId && !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(previousBattleId)) throw new HttpError(400, 'Invalid previous battle ID.', 'invalid_previous_battle');
-  const battle = await issueBattle(session, genre, decade, previousBattleId);
+  const sourceMode = request.body?.sourceMode || 'random';
+  const curatedSourceType = request.body?.curatedSourceType || null;
+  const playlistId = request.body?.playlistId || null;
+  if (playlistId && !/^[0-9a-f-]{36}$/i.test(playlistId)) throw new HttpError(400, 'Invalid playlist.', 'invalid_playlist');
+  const battle = await issueBattle(session, genre, decade, previousBattleId, { sourceMode, curatedSourceType, playlistId });
   json(response, 201, { battle });
 });

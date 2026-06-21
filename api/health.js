@@ -9,7 +9,7 @@ module.exports = async (request, response) => {
   let schemaReady = false;
   if (process.env.DATABASE_URL) {
     try {
-      const result = await getPool().query("SELECT to_regclass('public.users') IS NOT NULL AND to_regclass('public.battles') IS NOT NULL AS ready");
+      const result = await getPool().query("SELECT to_regclass('public.users') IS NOT NULL AND to_regclass('public.battles') IS NOT NULL AND to_regclass('public.nominations') IS NOT NULL AND to_regclass('public.tournaments') IS NOT NULL AS ready");
       databaseReachable = true;
       schemaReady = result.rows[0].ready;
     } catch {
