@@ -55,7 +55,7 @@ function trackFromJoined(row, prefix = '') {
 async function fetchState(roomId, role, playerId = null) {
   const room = (await getPool().query('SELECT * FROM party_rooms WHERE id=$1', [roomId])).rows[0];
   if (!room) throw new HttpError(404, 'Room not found.', 'room_not_found');
-  const playerRows = (await getPool().query(`SELECT p.id,p.display_name,p.active,p.ready,p.last_seen_at,count(s.id)::int AS pick_count
+  const playerRows = (await getPool().query(`SELECT p.id,p.display_name,p.active,p.ready,p.overall_score,p.last_seen_at,count(s.id)::int AS pick_count
     FROM party_players p LEFT JOIN party_songs s ON s.owner_player_id=p.id AND s.source='pick'
     WHERE p.room_id=$1 GROUP BY p.id ORDER BY p.joined_at`, [roomId])).rows;
   const revealOwners = room.phase === 'results' || room.phase === 'ended';
@@ -76,7 +76,7 @@ async function fetchState(roomId, role, playerId = null) {
     WHERE p.room_id=$3`, [current.id, current.vote_attempt, roomId])).rows[0] : { eligible: 0, voted: 0 };
   const visiblePlayers = playerRows.map(publicPlayer);
   const result = {
-    room: { code: room.code, phase: room.phase, maxBracketSize: room.max_bracket_size, bracketSize: room.bracket_size, version: Number(room.version), expiresAt: room.expires_at },
+    room: { code: room.code, phase: room.phase, maxBracketSize: room.max_bracket_size, bracketSize: room.bracket_size, roundsPlayed: room.rounds_played, version: Number(room.version), expiresAt: room.expires_at },
     players: visiblePlayers,
     currentMatchup: current ? {
       id: current.id, round: current.round, position: current.position, status: current.status, attempt: current.vote_attempt,
@@ -105,6 +105,9 @@ async function fetchState(roomId, role, playerId = null) {
       LEFT JOIN party_songs s ON s.owner_player_id=p.id LEFT JOIN party_matchups m ON m.winner_song_id=s.id AND m.room_id=p.room_id
       WHERE p.room_id=$1 GROUP BY p.id ORDER BY score DESC,p.display_name`, [roomId]);
     result.curators = scores.rows.map((r) => ({ id: r.id, displayName: r.display_name, score: r.score }));
+    result.overallCurators = [...visiblePlayers]
+      .sort((a, b) => b.overallScore - a.overallScore || a.displayName.localeCompare(b.displayName))
+      .map((player) => ({ id: player.id, displayName: player.displayName, score: player.overallScore }));
   }
   return result;
 }
@@ -190,7 +193,12 @@ async function completeMatch(client, room, match, winnerId) {
   await client.query("UPDATE party_matchups SET winner_song_id=$1,status='complete',completed_at=now() WHERE id=$2", [winnerId, match.id]);
   const maxRound = Math.log2(room.bracket_size);
   if (match.round === maxRound) {
-    await client.query("UPDATE party_rooms SET phase='results',version=version+1,updated_at=now(),expires_at=now()+interval '24 hours' WHERE id=$1", [room.id]);
+    await client.query(`UPDATE party_players p SET overall_score=p.overall_score+scores.score
+      FROM (SELECT s.owner_player_id,count(m.id)::int AS score
+        FROM party_matchups m JOIN party_songs s ON s.id=m.winner_song_id
+        WHERE m.room_id=$1 AND s.owner_player_id IS NOT NULL GROUP BY s.owner_player_id) scores
+      WHERE p.id=scores.owner_player_id`, [room.id]);
+    await client.query("UPDATE party_rooms SET phase='results',rounds_played=rounds_played+1,version=version+1,updated_at=now(),expires_at=now()+interval '24 hours' WHERE id=$1", [room.id]);
     return;
   }
   const nextRound = match.round + 1, nextPosition = Math.floor(match.position / 2);

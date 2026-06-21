@@ -41,7 +41,8 @@ function publicPlayer(row) {
     displayName: row.display_name,
     active: row.active,
     ready: row.ready,
-    pickCount: Number(row.pick_count || 0)
+    pickCount: Number(row.pick_count || 0),
+    overallScore: Number(row.overall_score || 0)
   };
 }
 

@@ -34,6 +34,8 @@ function render() {
     const winner = final?.winnerId === final?.songA?.roomSongId ? final.songA : final?.songB;
     if (winner) { $('#phone-champion-cover').src = winner.image; text('#phone-champion', winner.name); }
     $('#phone-curators').innerHTML = (state.curators || []).map((c) => `<li><span>${escapeHtml(c.displayName)}</span><strong>${c.score}</strong></li>`).join('');
+    text('#phone-overall-title', `Overall · ${state.room.roundsPlayed} round${state.room.roundsPlayed === 1 ? '' : 's'}`);
+    $('#phone-overall-curators').innerHTML = (state.overallCurators || []).map((c) => `<li><span>${escapeHtml(c.displayName)}</span><strong>${c.score}</strong></li>`).join('');
   } else if (current && ['voting','revote'].includes(current.status)) {
     phase('phone-vote');
     const cards = $$('.vote-card'); [current.songA, current.songB].forEach((track, i) => { $('img', cards[i]).src = track.image; $('strong', cards[i]).textContent = track.name; $('span', cards[i]).textContent = track.artist; cards[i].disabled = Boolean(state.yourVote); cards[i].classList.toggle('selected', state.yourVote === track.roomSongId); });

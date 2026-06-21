@@ -20,6 +20,6 @@ test('shuffle retains every element', () => {
 
 test('maps database player fields to the public phone state', () => {
   assert.deepEqual(publicPlayer({ id: 'p1', display_name: 'Alex', active: true, ready: false, pick_count: '2' }), {
-    id: 'p1', displayName: 'Alex', active: true, ready: false, pickCount: 2
+    id: 'p1', displayName: 'Alex', active: true, ready: false, pickCount: 2, overallScore: 0
   });
 });
