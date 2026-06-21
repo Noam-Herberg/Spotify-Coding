@@ -1,4 +1,9 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101210"><title>Host - Song Battle</title><link rel="stylesheet" href="/styles.css"><style>.song-card.winner{outline:3px solid var(--green)}</style></head><body class="host-page">
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#101210"><title>Host - Song Battle</title><link rel="stylesheet" href="/styles.css"><style>
+  .song-card{min-width:0;overflow:hidden}
+  .song-card.winner{outline:3px solid var(--green)}
+  .song-card>img{display:block;width:100%;height:clamp(220px,38vh,420px);aspect-ratio:auto;object-fit:cover}
+  @media(max-width:720px){.song-card>img{height:auto;aspect-ratio:1}}
+</style></head><body class="host-page">
 <header><a class="brand" href="/">Song<span>Battle</span></a><div class="header-actions"><span id="host-name"></span><button id="connect" class="spotify">Connect Spotify</button><button id="end" class="ghost" hidden>End room</button></div></header>
 <main><section id="host-intro" class="hero compact"><p class="eyebrow">HOST BOARD</p><h1>Run the room.</h1><p class="lead">Spotify Premium is required for full-track playback.</p><button id="create" hidden>Create party room</button><p id="host-status" class="status" role="status"></p></section>
 <section id="board" hidden>
